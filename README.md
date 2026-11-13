@@ -23,12 +23,11 @@ A planilha é lida só no navegador; nada é enviado para fora.
 
 ## Planilha modelo
 
-`Planilha Modelo - Deck de Resultados.xlsx` traz só o que o gerador precisa, com instruções na primeira aba e linhas de exemplo (SONDA, 2026) em amarelo:
+`Planilha Modelo - Deck de Resultados.xlsx` (também no botão **Baixar planilha modelo** do gerador) segue o formato das abas **KPI 25** e **KPI 26** da Tamiris, uma aba por ano:
 
-- **Base_Fill Rate**: `CÓD. REDE`, `REDE`, `nome_rede_pdv`, `ano`, `mes`, `Volume Total FR`, `Volume Atendido FR Aurora`.
-- **Base_Items Fill**: `CÓD. REDE`, `REDE`, `nome_rede_pdv`, `ano`, `mes`, `DePara_motivos`, `Chaves Totais Items Fill`, `Chaves Items Fill`, `Perdas IF`.
+`Rede_Semana`, `Rede_Mes`, `Rede Nome`, `x`, `cod_rede_pdv`, `mes`, `semana_do_ano`, `% FR Data Original`, `% Items Fill`, `Volume Total FR`, `Volume Atendido FR Aurora`, `Chaves Totais Items Fill`, `Chaves Items Fill`.
 
-O gerador acha as abas pelos cabeçalhos, então os nomes das abas podem mudar, mas os cabeçalhos não. Sem a aba de e-mails, Para e Cópia são preenchidos na tela do gerador.
+O gerador usa `cod_rede_pdv`, `Rede Nome`, `mes` e os quatro volumes. As colunas de % e as chaves `Rede_*` são só conferência. Pode ser uma linha por semana ou por mês. Para Para e Cópia, preencha na tela.
 
 ## Base no formato da Tamiris (abas "KPI 25", "KPI 26")
 
