@@ -64,13 +64,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .paperwrap{overflow-x:auto;border-radius:10px;border:1px solid var(--line)}
 .paper{background:#fff;color:#1b1b1b;padding:16px;min-width:0}
 .paper canvas{display:block;width:100%!important;height:auto!important}
-.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
-@media (max-width:760px){.cols{grid-template-columns:minmax(0,1fr)}}
-table.mot{width:100%;border-collapse:collapse;font-size:.88rem;font-variant-numeric:tabular-nums}
-table.mot th,table.mot td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
-table.mot th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-table.mot td.n{text-align:right}
-.bar{height:6px;border-radius:3px;background:var(--accent)}
 .hint{font-size:.85rem;color:var(--muted)}
 .mono{font-family:var(--mono);font-size:.8rem}
 .confirm{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:14px}
@@ -108,7 +101,8 @@ table.mot td.n{text-align:right}
     <div class="controls">
       <label for="rede">Rede<select id="rede"></select></label>
       <label for="ano">Ano<select id="ano"></select></label>
-      <label for="mes">Mês de fechamento<select id="mes"></select></label>
+      <label for="de">De<select id="de"></select></label>
+      <label for="mes">Até (mês de fechamento)<select id="mes"></select></label>
     </div>
   </section>
 
@@ -120,16 +114,10 @@ table.mot td.n{text-align:right}
       <div class="paperwrap"><div class="paper"><canvas id="chFR"></canvas></div></div>
       <div class="paperwrap"><div class="paper"><canvas id="chIF"></canvas></div></div>
     </div>
-    <div class="cols">
-      <div class="panel" style="padding:14px">
-        <h2 style="font-size:1.05rem">Motivos de perda · Items Fill no mês</h2>
-        <div id="motivos"></div>
-      </div>
-      <div class="panel" style="padding:14px">
-        <h2 style="font-size:1.05rem">Comentário do e-mail</h2>
-        <textarea id="comentario" aria-label="Comentário do e-mail"></textarea>
-        <div class="row"><button id="regen">Refazer texto sugerido</button><span class="hint">O texto sugerido é um ponto de partida. Ajuste a crítica antes de confirmar.</span></div>
-      </div>
+    <div class="panel" style="padding:14px">
+      <h2 style="font-size:1.05rem">Comentário do e-mail</h2>
+      <textarea id="comentario" aria-label="Comentário do e-mail" style="min-height:280px"></textarea>
+      <div class="row"><button id="regen">Refazer texto sugerido</button><span class="hint">O texto sugerido é um ponto de partida. Ajuste a crítica antes de confirmar.</span></div>
     </div>
     <div class="controls">
       <label for="para">Para<input type="text" id="para"></label>
@@ -264,24 +252,30 @@ function fillSelectors(){
   update();
 }
 function fillMeses(pickDefault){
-  const a=+$("ano").value,ms=mesesDe(a),sel=$("mes"),old=+sel.value;
-  sel.innerHTML=ms.map(m=>`<option value="${m}">${MESES_F[m-1]}</option>`).join("");
+  const a=+$("ano").value,ms=mesesDe(a),sel=$("mes"),old=+sel.value,de=$("de"),oldDe=+de.value;
+  const opts=ms.map(m=>`<option value="${m}">${MESES_F[m-1]}</option>`).join("");
+  sel.innerHTML=opts;de.innerHTML=opts;
+  de.value=(!pickDefault&&ms.includes(oldDe))?oldDe:ms[0];
   // padrão: mês anterior ao atual (último mês fechado), se existir na base
   const hoje=new Date();let alvo=ms[ms.length-1];
   if(a===hoje.getFullYear()&&ms.includes(hoje.getMonth()))alvo=hoje.getMonth();
   sel.value=(!pickDefault&&ms.includes(old))?old:alvo;
+  if(+de.value>+sel.value)de.value=sel.value;
 }
 
 /* ---------- cálculo ---------- */
 function serie(src,cod,ano){const o=(src[cod]||{})[ano]||{};return MESES.map((_,i)=>{const t=o[i+1];return t&&t[0]>0?t[1]/t[0]:null;});}
-function ytd(src,cod,ano,ate){const o=(src[cod]||{})[ano]||{};let a=0,b=0;for(let m=1;m<=ate;m++){const t=o[m];if(t){a+=t[0];b+=t[1];}}return a>0?b/a:null;}
+function ytd(src,cod,ano,de,ate){const o=(src[cod]||{})[ano]||{};let a=0,b=0;for(let m=de;m<=ate;m++){const t=o[m];if(t){a+=t[0];b+=t[1];}}return a>0?b/a:null;}
 function calc(){
-  const cod=+$("rede").value,ano=+$("ano").value,mes=+$("mes").value;
+  const cod=+$("rede").value,ano=+$("ano").value,mes=+$("mes").value,de=Math.min(+$("de").value||1,mes);
+  const acLabel=de===1?`YTD ${ano}`:`Acum. ${MESES[de-1]}–${MESES[mes-1]}`;
+  const acShort=de===1?`YTD ${String(ano).slice(2)}`:`${MESES[de-1]}–${MESES[mes-1]}`;
+  const meses=[];for(let m=de;m<=mes;m++)meses.push(m);
   const r=DB.redes[cod]||{cod};
   const k=src=>{
     const s=serie(src,cod,ano),sp=serie(src,cod,ano-1);
     const m0=s[mes-1],m1=mes>1?s[mes-2]:serie(src,cod,ano-1)[11];
-    const y=ytd(src,cod,ano,mes),yp=ytd(src,cod,ano-1,mes);
+    const y=ytd(src,cod,ano,de,mes),yp=ytd(src,cod,ano-1,de,mes);
     const hasPrev=sp.some(v=>v!=null);
     return{s:s.map((v,i)=>i<mes?v:null),sp,m0,m1,dM:m0!=null&&m1!=null?m0-m1:null,y,yp:hasPrev?yp:null,vsAA:hasPrev?rel(y,yp):null,hasPrev,m0aa:sp[mes-1]};
   };
@@ -289,7 +283,7 @@ function calc(){
   const mot=Object.entries(motO).map(([m,v])=>({m,v:v[0]})).sort((a,b)=>b.v-a.v);
   const frT=(((DB.fr[cod]||{})[ano]||{})[mes])||[0,0];
   const itT=(((DB.it[cod]||{})[ano]||{})[mes])||[0,0];
-  return{cod,ano,mes,rede:r.rede||r.nome||String(cod),nome:r.nome||r.rede||String(cod),fr:k(DB.fr),it:k(DB.it),mot,frT,itT,mail:DB.emails[cod]};
+  return{cod,ano,mes,de,meses,acLabel,acShort,rede:r.rede||r.nome||String(cod),nome:r.nome||r.rede||String(cod),fr:k(DB.fr),it:k(DB.it),mot,frT,itT,mail:DB.emails[cod]};
 }
 
 /* ---------- texto sugerido ---------- */
@@ -300,17 +294,17 @@ function sugerirTexto(c){
     if(k.m0==null)return`• ${nome}: sem dados em ${M}.`;
     let t=`• ${nome} fechou ${M} em ${pct(k.m0)}`;
     if(k.dM!=null)t+=`, ${k.dM>=0?"alta":"queda"} de ${Math.abs(k.dM*100).toFixed(1).replace(".",",")} p.p. vs ${Mp} (${pct(k.m1)})`;
-    t+=`. YTD ${c.ano} em ${pct(k.y)}`;
-    if(k.vsAA!=null)t+=` (${relTxt(k.vsAA)} vs YTD ${c.ano-1}: ${pct(k.yp)})`;
+    t+=`. ${c.acLabel} em ${pct(k.y)}`;
+    if(k.vsAA!=null)t+=` (${relTxt(k.vsAA)} vs mesmo período de ${c.ano-1}: ${pct(k.yp)})`;
     return t+".";
   };
   const tot=c.mot.reduce((a,b)=>a+b.v,0);
   let mot="";
   if(tot>0){const top=c.mot.slice(0,3).map(x=>`${x.m} (${fmtInt(x.v)} chave${x.v>1?"s":""}, ${Math.round(x.v/tot*100)}%)`);mot=`\nPrincipais motivos de perda no Items Fill: ${top.join(", ")}.`;}
-  const pior=(k)=>{let i=-1,v=2;k.s.forEach((x,j)=>{if(x!=null&&x<v){v=x;i=j;}});return i;};
+  const pior=(k)=>{let i=-1,v=2;k.s.forEach((x,j)=>{if(j>=c.de-1&&x!=null&&x<v){v=x;i=j;}});return i;};
   const pi=pior(c.fr);
   let destaque="";
-  if(pi>=0&&pi!==c.mes-1)destaque=`\nNo ano, o mês mais crítico de Fill Rate segue sendo ${MESES_F[pi]} (${pct(c.fr.s[pi])}).`;
+  if(pi>=0&&pi!==c.mes-1)destaque=`\nNo período, o mês mais crítico de Fill Rate segue sendo ${MESES_F[pi]} (${pct(c.fr.s[pi])}).`;
   return`Segue fechamento dos KPIs referente a ${M}.\n\n${linha("Fill Rate Data Original",c.fr)}\n${linha("Items Fill",c.it)}${mot}${destaque}\n\n[Descreva aqui os maiores impactos do mês e o porquê da evolução.]`;
 }
 
@@ -323,14 +317,14 @@ const labelsPlugin={id:"rotulos",
       const meta=ch.getDatasetMeta(di);if(meta.hidden)return;
       meta.data.forEach((el,i)=>{
         const v=ds.data[i];if(v==null)return;
+        if(ds.type==="bar"&&i>0)return; // colunas mensais: o rótulo fica na linha
         const isBar=ds.type==="bar",cur=ds._cur;
         ctx.font=`${cur||isBar?"700":"600"} ${isBar?15:14}px "IBM Plex Sans",Arial,sans-serif`;
-        ctx.fillStyle=isBar?(i===1?C.navy:"#333"):(cur?C.navy:"#6f747d");
         const y=isBar?el.y-8:(cur?el.y-10:el.y+20);
         // fundo branco para não brigar com a outra linha
         const txt=pct(v);const w=ctx.measureText(txt).width+6;
         ctx.fillStyle="rgba(255,255,255,.85)";ctx.fillRect(el.x-w/2,y-14,w,17);
-        ctx.fillStyle=isBar?(i===1?C.navy:"#333"):(cur?C.navy:"#6f747d");
+        ctx.fillStyle=C.navy;
         ctx.fillText(txt,el.x,y);
       });
     });
@@ -340,9 +334,6 @@ const labelsPlugin={id:"rotulos",
     ctx.fillText(ic.titulo||"",14,a.top+6);
     ctx.font='600 13px "IBM Plex Sans",Arial,sans-serif';ctx.fillStyle="#555";ctx.fillText(ic.sub||"",14,a.top+26);
     if(ic.icone==="truck")drawTruck(ctx,22,a.top+52,90);else if(ic.icone==="bottles")drawBottles(ctx,26,a.top+44,80);
-    // legenda
-    const lx=14,ly=a.bottom-6;ctx.font='600 12px "IBM Plex Sans",Arial,sans-serif';
-    [[C.navy,ic.ano],["#9a9a9a",ic.ano-1]].slice(0,ic.prev?2:1).forEach(([cor,t],j)=>{ctx.fillStyle=cor;ctx.fillRect(lx,ly-16+j*18,16,4);ctx.fillStyle="#333";ctx.fillText(String(t),lx+22,ly-10+j*18);});
     ctx.restore();
   }};
 function drawTruck(ctx,x,y,w){const s=w/100;ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.strokeStyle="#111";ctx.lineWidth=7;ctx.lineJoin="round";ctx.lineCap="round";
@@ -355,19 +346,18 @@ function drawBottles(ctx,x,y,w){const s=w/100;ctx.save();ctx.translate(x,y);ctx.
     ctx.fillStyle="#fff";ctx.fillRect(-13,56,26,22);ctx.beginPath();ctx.arc(0,67,6,0,Math.PI*2);ctx.fillStyle="#111";ctx.fill();ctx.fillStyle="#111";ctx.restore();};
   b(22,14,.78);b(78,14,.78);b(50,0,.95);ctx.restore();}
 
-function buildChart(canvas,k,ano,titulo,sub,icone){
-  const labels=[`YTD ${String(ano-1).slice(2)}`,`YTD ${String(ano).slice(2)}`,...MESES];
-  const pad=v=>[null,null,...v];
+function buildChart(canvas,k,c,titulo,sub,icone){
+  const vals=c.meses.map(m=>k.s[m-1]);
+  const labels=[c.acShort,...c.meses.map(m=>MESES[m-1])];
   const cfg={type:"line",
     data:{labels,datasets:[
-      {type:"bar",data:[k.yp,k.y,...Array(12).fill(null)],backgroundColor:[C.greyBar,C.blue],barPercentage:.9,categoryPercentage:.8,order:3},
-      {label:String(ano-1),data:pad(k.sp),borderColor:"#a3a3a3",borderWidth:4,cubicInterpolationMode:"monotone",pointRadius:0,spanGaps:true,order:2},
-      {label:String(ano),data:pad(k.s),borderColor:C.navy,borderWidth:4,cubicInterpolationMode:"monotone",pointRadius:4,pointBackgroundColor:C.navy,spanGaps:false,order:1,_cur:true}
+      {type:"bar",data:[k.y,...vals],backgroundColor:[C.navy,...vals.map(()=>"#b8cbee")],barPercentage:.78,categoryPercentage:.8,order:3},
+      {label:String(c.ano),data:[null,...vals],borderColor:C.blue,borderWidth:4,cubicInterpolationMode:"monotone",pointRadius:5,pointBackgroundColor:C.navy,pointBorderColor:"#fff",pointBorderWidth:2,spanGaps:true,order:1,_cur:true}
     ]},
     options:{responsive:false,animation:false,devicePixelRatio:2,
       layout:{padding:{left:150,right:20,top:34,bottom:4}},
       scales:{y:{display:false,min:0,max:1.12},x:{grid:{display:false},border:{display:false},ticks:{color:"#222",font:{weight:"700",size:14,family:'"IBM Plex Sans",Arial,sans-serif'}}}},
-      plugins:{legend:{display:false},tooltip:{enabled:false},rotulos:{titulo,sub,icone,ano,prev:k.hasPrev}}},
+      plugins:{legend:{display:false},tooltip:{enabled:false},rotulos:{titulo,sub,icone}}},
     plugins:[labelsPlugin]};
   canvas.width=1100;canvas.height=280;
   return new Chart(canvas,cfg);
@@ -380,9 +370,8 @@ function kpiCard(nome,k,c){
   <div class="row" style="align-items:baseline;gap:12px"><div class="big">${pct(k.m0)}</div><span class="pill ${cls(k.dM)}">${pp(k.dM)} vs ${MESES[(c.mes+10)%12]}</span></div>
   <div class="grid">
     <div><span>${MESES[(c.mes+10)%12]} (M-1)</span><strong>${pct(k.m1)}</strong></div>
-    <div><span>YTD ${c.ano}</span><strong>${pct(k.y)}</strong></div>
-    <div><span>YTD ${c.ano-1}</span><strong>${k.hasPrev?pct(k.yp):"sem base"}</strong></div>
-  </div>${k.vsAA!=null?`<div class="hint">vs ano anterior: <strong class="${cls(k.vsAA)}">${relTxt(k.vsAA)}</strong></div>`:""}</div>`;
+    <div><span>${c.acLabel}</span><strong>${pct(k.y)}</strong></div>
+  </div></div>`;
 }
 function update(){
   if(!$("rede").value)return;
@@ -390,13 +379,8 @@ function update(){
   const M=MESES_F[c.mes-1];
   $("kpis").innerHTML=kpiCard("Fill Rate Data Original · "+M,c.fr,c)+kpiCard("Items Fill · "+M,c.it,c);
   CH.fr&&CH.fr.destroy();CH.it&&CH.it.destroy();
-  CH.fr=buildChart($("chFR"),c.fr,c.ano,"FILL RATE",c.rede,"truck");
-  CH.it=buildChart($("chIF"),c.it,c.ano,"ITEMS FILL",c.rede,"bottles");
-  const tot=c.mot.reduce((a,b)=>a+b.v,0);
-  $("motivos").innerHTML=tot?`<table class="mot"><thead><tr><th>Motivo</th><th class="n">Chaves perdidas</th><th class="n">%</th><th style="width:30%"></th></tr></thead><tbody>${
-    c.mot.map(x=>`<tr><td>${esc(x.m)}</td><td class="n">${fmtInt(x.v)}</td><td class="n">${Math.round(x.v/tot*100)}%</td><td><div class="bar" style="width:${(x.v/c.mot[0].v*100).toFixed(0)}%"></div></td></tr>`).join("")}</tbody></table>
-    <p class="hint">Total no mês: ${fmtInt(c.itT[0])} chaves, ${fmtInt(c.itT[1])} atendidas. Fill Rate: volume ${fmtInt(c.frT[0])}, atendido ${fmtInt(c.frT[1])}.</p>`
-    :`<p class="hint">Sem perdas de Items Fill registradas em ${M}.</p>`;
+  CH.fr=buildChart($("chFR"),c.fr,c,"FILL RATE",c.rede,"truck");
+  CH.it=buildChart($("chIF"),c.it,c,"ITEMS FILL",c.rede,"bottles");
   $("comentario").value=sugerirTexto(c);
   $("para").value=(c.mail?.to||[]).join("; ");
   $("cc").value=(c.mail?.cc||[]).join("; ");
@@ -405,13 +389,13 @@ function update(){
 }
 
 /* ---------- e-mail ---------- */
-function tabelaMeses(k,ano){
+function tabelaMeses(k,c){
   const td='style="padding:3px 6px;border:1px solid #d9d9d9;text-align:center;font:12px Arial,sans-serif"';
   const th='style="padding:3px 6px;border:1px solid #d9d9d9;text-align:center;font:bold 12px Arial,sans-serif;background:#10284f;color:#fff"';
-  const linha=(rot,v,y)=>`<tr><td ${td}><b>${rot}</b></td><td ${td}>${y}</td>${v.map(x=>`<td ${td}>${x==null?"-":pct(x)}</td>`).join("")}</tr>`;
+  const linha=(rot,v,y)=>`<tr><td ${td}><b>${rot}</b></td><td ${td}>${y}</td>${c.meses.map(m=>`<td ${td}>${v[m-1]==null?"-":pct(v[m-1])}</td>`).join("")}</tr>`;
   return`<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 18px">
-  <tr><th ${th}></th><th ${th}>YTD</th>${MESES.map(m=>`<th ${th}>${m}</th>`).join("")}</tr>
-  ${k.hasPrev?linha(ano-1,k.sp,pct(k.yp)):""}${linha(ano,k.s,pct(k.y))}</table>`;
+  <tr><th ${th}></th><th ${th}>${c.acShort}</th>${c.meses.map(m=>`<th ${th}>${MESES[m-1]}</th>`).join("")}</tr>
+  ${linha(c.ano,k.s,pct(k.y))}</table>`;
 }
 function emailHTML(c,img){
   const M=MESES_F[c.mes-1];
@@ -435,13 +419,13 @@ ${paras}
   <div style="font:12px Arial,sans-serif;color:#b9c8e6">${M} ${c.ano}</div></td>
 <td style="padding-left:18px;vertical-align:middle">
 <table cellpadding="0" cellspacing="0" style="border-collapse:collapse">
-<tr><td></td><td ${head}>${MESES[(c.mes+10)%12]}</td><td ${head}>${MESES[c.mes-1]}</td><td ${head}>vs M-1</td>${prev?`<td ${head}>YTD ${String(c.ano-1).slice(2)}</td>`:""}<td ${head}>YTD ${String(c.ano).slice(2)}</td>${prev?`<td ${head}>vs ${String(c.ano-1).slice(2)}</td>`:""}</tr>
+<tr><td></td><td ${head}>${MESES[(c.mes+10)%12]}</td><td ${head}>${MESES[c.mes-1]}</td><td ${head}>vs M-1</td>${prev?`<td ${head}>${c.acShort.replace(/\d\d$/,String(c.ano-1).slice(2))}${c.de===1?"":" "+(c.ano-1)}</td>`:""}<td ${head}>${c.acShort}</td>${prev?`<td ${head}>vs ${String(c.ano-1).slice(2)}</td>`:""}</tr>
 ${kpiRow("Fill Rate Data Original",c.fr)}${kpiRow("Items Fill",c.it)}
 </table></td></tr></table>
 <img src="${img.fr}" width="1000" alt="Fill Rate ${esc(c.rede)}" style="display:block;width:100%;max-width:1000px;height:auto;border:0">
-${tabelaMeses(c.fr,c.ano)}
+${tabelaMeses(c.fr,c)}
 <img src="${img.it}" width="1000" alt="Items Fill ${esc(c.rede)}" style="display:block;width:100%;max-width:1000px;height:auto;border:0">
-${tabelaMeses(c.it,c.ano)}
+${tabelaMeses(c.it,c)}
 <p style="margin:14px 0 0;font:14px Calibri,Arial,sans-serif">Att,</p>
 ${nome?`<p style="margin:6px 0 0;font:bold 14px Calibri,Arial,sans-serif">${esc(nome)}</p>`:""}
 ${cargo?`<p style="margin:0;font:13px Calibri,Arial,sans-serif;color:#555">${esc(cargo)}</p>`:""}
@@ -479,7 +463,9 @@ const dz=$("drop");
 ["dragenter","dragover"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add("over");}));
 ["dragleave","drop"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove("over");}));
 dz.addEventListener("drop",e=>e.dataTransfer.files.length&&loadFiles([...e.dataTransfer.files]));
-$("rede").onchange=update;$("mes").onchange=update;$("ano").onchange=()=>{fillMeses(false);update();};
+$("rede").onchange=update;
+$("mes").onchange=()=>{if(+$("de").value>+$("mes").value)$("de").value=$("mes").value;update();};
+$("de").onchange=()=>{if(+$("de").value>+$("mes").value)$("mes").value=$("de").value;update();};$("ano").onchange=()=>{fillMeses(false);update();};
 $("regen").onclick=()=>CUR&&($("comentario").value=sugerirTexto(CUR));
 ["assNome","assCargo","assEmail"].forEach(id=>{$(id).value=store.get("deck."+id);$(id).addEventListener("input",()=>store.set("deck."+id,$(id).value));});
 $("confirmar").onclick=()=>{
