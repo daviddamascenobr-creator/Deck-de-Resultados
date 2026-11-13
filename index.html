@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deck de Resultados</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: barra de passos no topo, painel de controle + prévia do e-mail em "papel" branco */
+:root{
+  --bg:#eef1f6; --surface:#ffffff; --fg:#14213a; --muted:#5b6780; --line:#d5dbe6;
+  --accent:#1f5fd6; --accent-ink:#ffffff; --navy:#10284f;
+  --good:#1d8a52; --bad:#c2402e; --chip:#e3eaf7;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1422; --surface:#151f33; --fg:#e6ebf5; --muted:#9aa6bf; --line:#2a3752;
+  --accent:#5b91f0; --accent-ink:#0d1422; --navy:#cfdcf5; --good:#4cc488; --bad:#f07a66; --chip:#1f2c47; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1422; --surface:#151f33; --fg:#e6ebf5; --muted:#9aa6bf; --line:#2a3752;
+  --accent:#5b91f0; --accent-ink:#0d1422; --navy:#cfdcf5; --good:#4cc488; --bad:#f07a66; --chip:#1f2c47; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:20px}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 20px}
+h1{font:700 2.1rem/1 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0;color:var(--navy);text-wrap:balance}
+h1 span{color:var(--accent)}
+h2{font:700 1.25rem/1.1 var(--display);letter-spacing:.04em;text-transform:uppercase;margin:0;color:var(--navy)}
+.sub{color:var(--muted);margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:14px;min-width:0}
+.step{display:flex;align-items:center;gap:10px}
+.step b{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font:600 .85rem var(--body)}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.drop.over{border-color:var(--accent);background:var(--chip)}
+.status{font-size:.9rem;color:var(--muted)}
+.status.ok{color:var(--good)} .status.err{color:var(--bad)}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label{display:grid;gap:4px;font-size:.78rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+select,input[type=text],textarea{font:15px/1.4 var(--body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:9px 10px;width:100%;min-width:0;text-transform:none;letter-spacing:0;font-weight:400}
+textarea{min-height:150px;resize:vertical}
+select:focus,input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button{font:600 .95rem var(--body);border-radius:7px;padding:10px 16px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:8px}
+.kpi .name{font:700 1.05rem var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi .big{font:700 2.6rem/1 var(--display);color:var(--navy);font-variant-numeric:tabular-nums}
+.kpi .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:.85rem}
+.kpi .grid div{display:grid;gap:2px}
+.kpi .grid span{color:var(--muted);font-size:.72rem;letter-spacing:.05em;text-transform:uppercase}
+.kpi .grid strong{font-variant-numeric:tabular-nums}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.8rem;font-weight:600;background:var(--chip)}
+.up{color:var(--good)} .down{color:var(--bad)}
+.charts{display:grid;gap:14px}
+.paperwrap{overflow-x:auto;border-radius:10px;border:1px solid var(--line)}
+.paper{background:#fff;color:#1b1b1b;padding:16px;min-width:0}
+.paper canvas{display:block;width:100%!important;height:auto!important}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+@media (max-width:760px){.cols{grid-template-columns:minmax(0,1fr)}}
+table.mot{width:100%;border-collapse:collapse;font-size:.88rem;font-variant-numeric:tabular-nums}
+table.mot th,table.mot td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+table.mot th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+table.mot td.n{text-align:right}
+.bar{height:6px;border-radius:3px;background:var(--accent)}
+.hint{font-size:.85rem;color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.8rem}
+.confirm{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:14px}
+@media (prefers-reduced-motion:no-preference){.panel{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Deck de Resultados <span>·</span> E-mail por rede</h1>
+      <p class="sub">Fill Rate Data Original e Items Fill, mês a mês, com comentário e gráficos prontos para enviar.</p>
+    </div>
+    <p class="sub mono" id="baseInfo">Nenhuma base carregada</p>
+  </header>
+
+  <!-- 1. Base -->
+  <section class="panel">
+    <div class="step"><b>1</b><h2>Carregar a planilha</h2></div>
+    <div class="drop" id="drop">
+      <div>
+        <div>Arraste aqui o <strong>Deck de Resultados SP.xlsx</strong> (pode soltar mais de um arquivo, por exemplo a base de 2025).</div>
+        <div class="status" id="loadStatus">A planilha é lida só no seu navegador. Nada é enviado para fora.</div>
+      </div>
+      <div class="row">
+        <input type="file" id="file" accept=".xlsx,.xlsm,.xls" multiple hidden>
+        <button class="primary" id="pick">Escolher arquivo</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Seleção -->
+  <section class="panel" id="secSel" hidden>
+    <div class="step"><b>2</b><h2>Escolher rede e mês</h2></div>
+    <div class="controls">
+      <label for="rede">Rede<select id="rede"></select></label>
+      <label for="ano">Ano<select id="ano"></select></label>
+      <label for="mes">Mês de fechamento<select id="mes"></select></label>
+    </div>
+  </section>
+
+  <!-- 3. Prévia dos KPIs -->
+  <section class="panel" id="secPrev" hidden>
+    <div class="step"><b>3</b><h2>Conferir KPIs e gráficos</h2></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="charts">
+      <div class="paperwrap"><div class="paper"><canvas id="chFR"></canvas></div></div>
+      <div class="paperwrap"><div class="paper"><canvas id="chIF"></canvas></div></div>
+    </div>
+    <div class="cols">
+      <div class="panel" style="padding:14px">
+        <h2 style="font-size:1.05rem">Motivos de perda · Items Fill no mês</h2>
+        <div id="motivos"></div>
+      </div>
+      <div class="panel" style="padding:14px">
+        <h2 style="font-size:1.05rem">Comentário do e-mail</h2>
+        <textarea id="comentario" aria-label="Comentário do e-mail"></textarea>
+        <div class="row"><button id="regen">Refazer texto sugerido</button><span class="hint">O texto sugerido é um ponto de partida. Ajuste a crítica antes de confirmar.</span></div>
+      </div>
+    </div>
+    <div class="controls">
+      <label for="para">Para<input type="text" id="para"></label>
+      <label for="cc">Cópia<input type="text" id="cc"></label>
+      <label for="assunto">Assunto<input type="text" id="assunto"></label>
+    </div>
+    <div class="controls">
+      <label for="assNome">Assinatura · nome<input type="text" id="assNome" placeholder="Seu nome"></label>
+      <label for="assCargo">Assinatura · cargo<input type="text" id="assCargo" placeholder="Cargo / área"></label>
+      <label for="assEmail">Assinatura · e-mail<input type="text" id="assEmail" placeholder="seu.email@empresa.com"></label>
+    </div>
+    <div class="confirm">
+      <span class="hint">Tudo certo com os números e o visual? Confirme para montar o e-mail.</span>
+      <button class="primary" id="confirmar">Confirmar e gerar modelo de e-mail</button>
+    </div>
+  </section>
+
+  <!-- 4. E-mail -->
+  <section class="panel" id="secMail" hidden>
+    <div class="step"><b>4</b><h2>Modelo de e-mail</h2></div>
+    <div class="row">
+      <button class="primary" id="baixar">Baixar e-mail (.eml, abre no Outlook)</button>
+      <button id="copiar">Copiar e-mail</button>
+      <button id="baixarHtml">Baixar como .html</button>
+      <span class="status" id="mailStatus"></span>
+    </div>
+    <p class="hint">O arquivo .eml abre no Outlook como rascunho, já com Para, Cópia, assunto e gráficos. É só revisar e enviar.</p>
+    <div class="paperwrap"><div class="paper" id="mailPreview"></div></div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script>
+"use strict";
+const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MESES_F=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const C={navy:"#10284f",blue:"#3f74d6",grey:"#8a8f99",greyBar:"#9a9a9a",ink:"#1b1b1b"};
+const $=id=>document.getElementById(id);
+
+/* ---------- estado ---------- */
+const DB={fr:{},it:{},mot:{},redes:{},emails:{},files:[]};
+let CH={fr:null,it:null};
+let CUR=null;   // cálculo da rede/mês selecionados
+
+/* ---------- utilidades ---------- */
+const norm=s=>String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").trim().toLowerCase();
+const num=v=>{if(typeof v==="number")return v; if(v==null||v==="")return 0; const n=Number(String(v).replace(/\./g,"").replace(",","."));return isFinite(n)?n:0;};
+const pct=(v,d=1)=>v==null||!isFinite(v)?"-":(v*100).toFixed(d).replace(".",",")+"%";
+const pp=v=>v==null||!isFinite(v)?"-":(v>0?"+":"")+(v*100).toFixed(1).replace(".",",")+" p.p.";
+const rel=(a,b)=>a==null||b==null||!b?null:a/b-1;
+const relTxt=v=>v==null?"-":(v>0?"+":"")+(v*100).toFixed(1).replace(".",",")+"%";
+const fmtInt=v=>Math.round(v).toLocaleString("pt-BR");
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cleanEmails=s=>String(s??"").split(/[;,\s]+/).map(x=>x.replace(/^[<"']+|[>"']+$/g,"").trim()).filter(x=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).filter((x,i,a)=>a.findIndex(y=>y.toLowerCase()===x.toLowerCase())===i);
+const store={get(k){try{return localStorage.getItem(k)||""}catch(e){return ""}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+function bump(obj,keys,vals){let o=obj;for(let i=0;i<keys.length-1;i++){o=o[keys[i]]??(o[keys[i]]={});}const k=keys[keys.length-1];const t=o[k]??(o[k]=vals.map(()=>0));vals.forEach((v,i)=>t[i]+=v);}
+
+/* ---------- leitura da planilha ---------- */
+function findHeader(rows,must){
+  for(let i=0;i<Math.min(rows.length,30);i++){
+    const r=(rows[i]||[]).map(norm);
+    if(must.every(m=>r.includes(norm(m)))){const idx={};r.forEach((h,j)=>{if(h&&!(h in idx))idx[h]=j;});return{i,idx};}
+  }
+  return null;
+}
+function col(idx,name){const j=idx[norm(name)];return j==null?-1:j;}
+
+function ingest(wb,fname){
+  const out={fr:0,it:0,em:0};
+  for(const sn of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});
+    let h;
+    if((h=findHeader(rows,["Volume Total FR","Volume Atendido FR Aurora","mes"]))){
+      const c={cod:col(h.idx,"CÓD. REDE"),rede:col(h.idx,"REDE"),nome:col(h.idx,"nome_rede_pdv"),ano:col(h.idx,"ano"),mes:col(h.idx,"mes"),
+        tot:col(h.idx,"Volume Total FR"),at:col(h.idx,"Volume Atendido FR Aurora"),cod2:col(h.idx,"cod_rede_pdv")};
+      for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
+        const cod=num(x[c.cod]!=null?x[c.cod]:x[c.cod2]),ano=num(x[c.ano]),mes=num(x[c.mes]);
+        if(!cod||!ano||!mes)continue;
+        bump(DB.fr,[cod,ano,mes],[num(x[c.tot]),num(x[c.at])]);
+        regRede(cod,x[c.rede],x[c.nome]);out.fr++;}
+    } else if((h=findHeader(rows,["Chaves Totais Items Fill","Chaves Items Fill","mes"]))){
+      const c={cod:col(h.idx,"CÓD. REDE"),rede:col(h.idx,"REDE"),nome:col(h.idx,"nome_rede_pdv"),ano:col(h.idx,"ano"),mes:col(h.idx,"mes"),
+        tot:col(h.idx,"Chaves Totais Items Fill"),ok:col(h.idx,"Chaves Items Fill"),per:col(h.idx,"Perdas IF"),mot:col(h.idx,"DePara_motivos"),cat:col(h.idx,"categoria"),cod2:col(h.idx,"cod_rede_pdv")};
+      for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
+        const cod=num(x[c.cod]!=null?x[c.cod]:x[c.cod2]),ano=num(x[c.ano]),mes=num(x[c.mes]);
+        if(!cod||!ano||!mes)continue;
+        const tot=num(x[c.tot]),ok=num(x[c.ok]),per=c.per>=0?num(x[c.per]):tot-ok;
+        bump(DB.it,[cod,ano,mes],[tot,ok]);
+        if(per>0){let m=x[c.mot];m=(m==null||m===0||m==="0"||m==="")?"Sem motivo":String(m).trim();bump(DB.mot,[cod,ano,mes,m],[per]);}
+        regRede(cod,x[c.rede],x[c.nome]);out.it++;}
+    } else if((h=findHeader(rows,["Rede","To"]))){
+      const c={cod:col(h.idx,"Número Rede"),rede:col(h.idx,"Rede"),to:col(h.idx,"To"),cc:col(h.idx,"Cópia")};
+      for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
+        const cod=num(x[c.cod]);if(!cod)continue;
+        DB.emails[cod]={rede:x[c.rede],to:cleanEmails(x[c.to]),cc:cleanEmails(c.cc>=0?x[c.cc]:"")};out.em++;}
+    }
+  }
+  DB.files.push(fname);
+  return out;
+}
+function regRede(cod,rede,nome){const r=DB.redes[cod]??(DB.redes[cod]={cod});if(rede&&!r.rede)r.rede=String(rede).trim();if(nome&&!r.nome)r.nome=String(nome).trim();}
+
+async function loadFiles(files){
+  const st=$("loadStatus");st.className="status";st.textContent="Lendo planilha…";
+  try{
+    let tot={fr:0,it:0,em:0};
+    for(const f of files){
+      const buf=await f.arrayBuffer();
+      const wb=XLSX.read(buf,{type:"array",dense:true});
+      const o=ingest(wb,f.name);tot.fr+=o.fr;tot.it+=o.it;tot.em+=o.em;
+    }
+    if(!Object.keys(DB.redes).length) throw new Error("Não achei as abas de Fill Rate ou Items Fill. Confira se é a planilha do Deck de Resultados.");
+    st.className="status ok";
+    st.textContent=`Base carregada: ${fmtInt(tot.fr)} linhas de Fill Rate, ${fmtInt(tot.it)} de Items Fill, ${tot.em} redes com e-mail.`;
+    fillSelectors();
+  }catch(e){console.error(e);st.className="status err";st.textContent="Não consegui ler o arquivo: "+e.message;}
+}
+
+/* ---------- seletores ---------- */
+function anos(){const s=new Set();for(const c in DB.fr)for(const a in DB.fr[c])s.add(+a);for(const c in DB.it)for(const a in DB.it[c])s.add(+a);return[...s].sort();}
+function mesesDe(ano){const s=new Set();for(const c in DB.fr)for(const m in (DB.fr[c][ano]||{}))s.add(+m);for(const c in DB.it)for(const m in (DB.it[c][ano]||{}))s.add(+m);return[...s].sort((a,b)=>a-b);}
+function fillSelectors(){
+  const redes=Object.values(DB.redes).sort((a,b)=>(a.rede||a.nome||"").localeCompare(b.rede||b.nome||"","pt-BR"));
+  const sel=$("rede"),prev=sel.value||store.get("deck.rede");
+  sel.innerHTML=redes.map(r=>`<option value="${r.cod}">${esc(r.rede||r.nome)} · ${r.cod}${DB.emails[r.cod]?"":" (sem e-mail)"}</option>`).join("");
+  if(prev&&DB.redes[prev])sel.value=prev;
+  const as=anos(),ys=$("ano");ys.innerHTML=as.map(a=>`<option>${a}</option>`).join("");ys.value=as[as.length-1];
+  fillMeses(true);
+  $("baseInfo").textContent=`${redes.length} redes · ${as.join(", ")} · ${DB.files.join(" + ")}`;
+  $("secSel").hidden=false;$("secPrev").hidden=false;
+  update();
+}
+function fillMeses(pickDefault){
+  const a=+$("ano").value,ms=mesesDe(a),sel=$("mes"),old=+sel.value;
+  sel.innerHTML=ms.map(m=>`<option value="${m}">${MESES_F[m-1]}</option>`).join("");
+  // padrão: mês anterior ao atual (último mês fechado), se existir na base
+  const hoje=new Date();let alvo=ms[ms.length-1];
+  if(a===hoje.getFullYear()&&ms.includes(hoje.getMonth()))alvo=hoje.getMonth();
+  sel.value=(!pickDefault&&ms.includes(old))?old:alvo;
+}
+
+/* ---------- cálculo ---------- */
+function serie(src,cod,ano){const o=(src[cod]||{})[ano]||{};return MESES.map((_,i)=>{const t=o[i+1];return t&&t[0]>0?t[1]/t[0]:null;});}
+function ytd(src,cod,ano,ate){const o=(src[cod]||{})[ano]||{};let a=0,b=0;for(let m=1;m<=ate;m++){const t=o[m];if(t){a+=t[0];b+=t[1];}}return a>0?b/a:null;}
+function calc(){
+  const cod=+$("rede").value,ano=+$("ano").value,mes=+$("mes").value;
+  const r=DB.redes[cod]||{cod};
+  const k=src=>{
+    const s=serie(src,cod,ano),sp=serie(src,cod,ano-1);
+    const m0=s[mes-1],m1=mes>1?s[mes-2]:serie(src,cod,ano-1)[11];
+    const y=ytd(src,cod,ano,mes),yp=ytd(src,cod,ano-1,mes);
+    const hasPrev=sp.some(v=>v!=null);
+    return{s:s.map((v,i)=>i<mes?v:null),sp,m0,m1,dM:m0!=null&&m1!=null?m0-m1:null,y,yp:hasPrev?yp:null,vsAA:hasPrev?rel(y,yp):null,hasPrev,m0aa:sp[mes-1]};
+  };
+  const motO=((DB.mot[cod]||{})[ano]||{})[mes]||{};
+  const mot=Object.entries(motO).map(([m,v])=>({m,v:v[0]})).sort((a,b)=>b.v-a.v);
+  const frT=(((DB.fr[cod]||{})[ano]||{})[mes])||[0,0];
+  const itT=(((DB.it[cod]||{})[ano]||{})[mes])||[0,0];
+  return{cod,ano,mes,rede:r.rede||r.nome||String(cod),nome:r.nome||r.rede||String(cod),fr:k(DB.fr),it:k(DB.it),mot,frT,itT,mail:DB.emails[cod]};
+}
+
+/* ---------- texto sugerido ---------- */
+function saudacao(){const h=new Date().getHours();return h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";}
+function sugerirTexto(c){
+  const M=MESES_F[c.mes-1],Mp=MESES_F[(c.mes+10)%12];
+  const linha=(nome,k)=>{
+    if(k.m0==null)return`• ${nome}: sem dados em ${M}.`;
+    let t=`• ${nome} fechou ${M} em ${pct(k.m0)}`;
+    if(k.dM!=null)t+=`, ${k.dM>=0?"alta":"queda"} de ${Math.abs(k.dM*100).toFixed(1).replace(".",",")} p.p. vs ${Mp} (${pct(k.m1)})`;
+    t+=`. YTD ${c.ano} em ${pct(k.y)}`;
+    if(k.vsAA!=null)t+=` (${relTxt(k.vsAA)} vs YTD ${c.ano-1}: ${pct(k.yp)})`;
+    return t+".";
+  };
+  const tot=c.mot.reduce((a,b)=>a+b.v,0);
+  let mot="";
+  if(tot>0){const top=c.mot.slice(0,3).map(x=>`${x.m} (${fmtInt(x.v)} chave${x.v>1?"s":""}, ${Math.round(x.v/tot*100)}%)`);mot=`\nPrincipais motivos de perda no Items Fill: ${top.join(", ")}.`;}
+  const pior=(k)=>{let i=-1,v=2;k.s.forEach((x,j)=>{if(x!=null&&x<v){v=x;i=j;}});return i;};
+  const pi=pior(c.fr);
+  let destaque="";
+  if(pi>=0&&pi!==c.mes-1)destaque=`\nNo ano, o mês mais crítico de Fill Rate segue sendo ${MESES_F[pi]} (${pct(c.fr.s[pi])}).`;
+  return`Segue fechamento dos KPIs referente a ${M}.\n\n${linha("Fill Rate Data Original",c.fr)}\n${linha("Items Fill",c.it)}${mot}${destaque}\n\n[Descreva aqui os maiores impactos do mês e o porquê da evolução.]`;
+}
+
+/* ---------- gráficos ---------- */
+const labelsPlugin={id:"rotulos",
+  beforeDraw(ch){const{ctx,width,height}=ch;ctx.save();ctx.fillStyle="#fff";ctx.fillRect(0,0,width,height);ctx.restore();},
+  afterDatasetsDraw(ch){
+    const{ctx}=ch;ctx.save();ctx.textAlign="center";
+    ch.data.datasets.forEach((ds,di)=>{
+      const meta=ch.getDatasetMeta(di);if(meta.hidden)return;
+      meta.data.forEach((el,i)=>{
+        const v=ds.data[i];if(v==null)return;
+        const isBar=ds.type==="bar",cur=ds._cur;
+        ctx.font=`${cur||isBar?"700":"600"} ${isBar?15:14}px "IBM Plex Sans",Arial,sans-serif`;
+        ctx.fillStyle=isBar?(i===1?C.navy:"#333"):(cur?C.navy:"#6f747d");
+        const y=isBar?el.y-8:(cur?el.y-10:el.y+20);
+        // fundo branco para não brigar com a outra linha
+        const txt=pct(v);const w=ctx.measureText(txt).width+6;
+        ctx.fillStyle="rgba(255,255,255,.85)";ctx.fillRect(el.x-w/2,y-14,w,17);
+        ctx.fillStyle=isBar?(i===1?C.navy:"#333"):(cur?C.navy:"#6f747d");
+        ctx.fillText(txt,el.x,y);
+      });
+    });
+    // ícone + título à esquerda
+    const ic=ch.options.plugins.rotulos||{};const a=ch.chartArea;
+    ctx.textAlign="left";ctx.fillStyle=C.navy;ctx.font='700 22px "Barlow Condensed","Arial Narrow",Arial,sans-serif';
+    ctx.fillText(ic.titulo||"",14,a.top+6);
+    ctx.font='600 13px "IBM Plex Sans",Arial,sans-serif';ctx.fillStyle="#555";ctx.fillText(ic.sub||"",14,a.top+26);
+    if(ic.icone==="truck")drawTruck(ctx,22,a.top+52,90);else if(ic.icone==="bottles")drawBottles(ctx,26,a.top+44,80);
+    // legenda
+    const lx=14,ly=a.bottom-6;ctx.font='600 12px "IBM Plex Sans",Arial,sans-serif';
+    [[C.navy,ic.ano],["#9a9a9a",ic.ano-1]].slice(0,ic.prev?2:1).forEach(([cor,t],j)=>{ctx.fillStyle=cor;ctx.fillRect(lx,ly-16+j*18,16,4);ctx.fillStyle="#333";ctx.fillText(String(t),lx+22,ly-10+j*18);});
+    ctx.restore();
+  }};
+function drawTruck(ctx,x,y,w){const s=w/100;ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.strokeStyle="#111";ctx.lineWidth=7;ctx.lineJoin="round";ctx.lineCap="round";
+  ctx.beginPath();ctx.moveTo(18,8);ctx.lineTo(62,8);ctx.lineTo(62,56);ctx.moveTo(62,22);ctx.lineTo(80,22);ctx.lineTo(96,38);ctx.lineTo(96,56);ctx.lineTo(86,56);ctx.moveTo(66,56);ctx.lineTo(36,56);ctx.moveTo(18,56);ctx.lineTo(8,56);ctx.lineTo(8,44);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(70,30);ctx.lineTo(80,30);ctx.lineTo(86,38);ctx.lineTo(86,44);ctx.lineTo(70,44);ctx.closePath();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,22);ctx.lineTo(28,22);ctx.moveTo(4,32);ctx.lineTo(36,32);ctx.stroke();
+  [[27,58],[76,58]].forEach(([cx,cy])=>{ctx.beginPath();ctx.arc(cx,cy,9,0,Math.PI*2);ctx.fillStyle="#fff";ctx.fill();ctx.stroke();});ctx.restore();}
+function drawBottles(ctx,x,y,w){const s=w/100;ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.fillStyle="#111";
+  const b=(bx,by,sc)=>{ctx.save();ctx.translate(bx,by);ctx.scale(sc,sc);ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(6,0);ctx.lineTo(6,22);ctx.quadraticCurveTo(18,32,18,46);ctx.lineTo(18,92);ctx.quadraticCurveTo(18,98,12,98);ctx.lineTo(-12,98);ctx.quadraticCurveTo(-18,98,-18,92);ctx.lineTo(-18,46);ctx.quadraticCurveTo(-18,32,-6,22);ctx.closePath();ctx.fill();
+    ctx.fillStyle="#fff";ctx.fillRect(-13,56,26,22);ctx.beginPath();ctx.arc(0,67,6,0,Math.PI*2);ctx.fillStyle="#111";ctx.fill();ctx.fillStyle="#111";ctx.restore();};
+  b(22,14,.78);b(78,14,.78);b(50,0,.95);ctx.restore();}
+
+function buildChart(canvas,k,ano,titulo,sub,icone){
+  const labels=[`YTD ${String(ano-1).slice(2)}`,`YTD ${String(ano).slice(2)}`,...MESES];
+  const pad=v=>[null,null,...v];
+  const cfg={type:"line",
+    data:{labels,datasets:[
+      {type:"bar",data:[k.yp,k.y,...Array(12).fill(null)],backgroundColor:[C.greyBar,C.blue],barPercentage:.9,categoryPercentage:.8,order:3},
+      {label:String(ano-1),data:pad(k.sp),borderColor:"#a3a3a3",borderWidth:4,cubicInterpolationMode:"monotone",pointRadius:0,spanGaps:true,order:2},
+      {label:String(ano),data:pad(k.s),borderColor:C.navy,borderWidth:4,cubicInterpolationMode:"monotone",pointRadius:4,pointBackgroundColor:C.navy,spanGaps:false,order:1,_cur:true}
+    ]},
+    options:{responsive:false,animation:false,devicePixelRatio:2,
+      layout:{padding:{left:150,right:20,top:34,bottom:4}},
+      scales:{y:{display:false,min:0,max:1.12},x:{grid:{display:false},border:{display:false},ticks:{color:"#222",font:{weight:"700",size:14,family:'"IBM Plex Sans",Arial,sans-serif'}}}},
+      plugins:{legend:{display:false},tooltip:{enabled:false},rotulos:{titulo,sub,icone,ano,prev:k.hasPrev}}},
+    plugins:[labelsPlugin]};
+  canvas.width=1100;canvas.height=280;
+  return new Chart(canvas,cfg);
+}
+
+/* ---------- prévia ---------- */
+function kpiCard(nome,k,c){
+  const cls=v=>v==null?"":v>=0?"up":"down";
+  return`<div class="kpi"><div class="name">${nome}</div>
+  <div class="row" style="align-items:baseline;gap:12px"><div class="big">${pct(k.m0)}</div><span class="pill ${cls(k.dM)}">${pp(k.dM)} vs ${MESES[(c.mes+10)%12]}</span></div>
+  <div class="grid">
+    <div><span>${MESES[(c.mes+10)%12]} (M-1)</span><strong>${pct(k.m1)}</strong></div>
+    <div><span>YTD ${c.ano}</span><strong>${pct(k.y)}</strong></div>
+    <div><span>YTD ${c.ano-1}</span><strong>${k.hasPrev?pct(k.yp):"sem base"}</strong></div>
+  </div>${k.vsAA!=null?`<div class="hint">vs ano anterior: <strong class="${cls(k.vsAA)}">${relTxt(k.vsAA)}</strong></div>`:""}</div>`;
+}
+function update(){
+  if(!$("rede").value)return;
+  const c=calc();CUR=c;store.set("deck.rede",String(c.cod));
+  const M=MESES_F[c.mes-1];
+  $("kpis").innerHTML=kpiCard("Fill Rate Data Original · "+M,c.fr,c)+kpiCard("Items Fill · "+M,c.it,c);
+  CH.fr&&CH.fr.destroy();CH.it&&CH.it.destroy();
+  CH.fr=buildChart($("chFR"),c.fr,c.ano,"FILL RATE",c.rede,"truck");
+  CH.it=buildChart($("chIF"),c.it,c.ano,"ITEMS FILL",c.rede,"bottles");
+  const tot=c.mot.reduce((a,b)=>a+b.v,0);
+  $("motivos").innerHTML=tot?`<table class="mot"><thead><tr><th>Motivo</th><th class="n">Chaves perdidas</th><th class="n">%</th><th style="width:30%"></th></tr></thead><tbody>${
+    c.mot.map(x=>`<tr><td>${esc(x.m)}</td><td class="n">${fmtInt(x.v)}</td><td class="n">${Math.round(x.v/tot*100)}%</td><td><div class="bar" style="width:${(x.v/c.mot[0].v*100).toFixed(0)}%"></div></td></tr>`).join("")}</tbody></table>
+    <p class="hint">Total no mês: ${fmtInt(c.itT[0])} chaves, ${fmtInt(c.itT[1])} atendidas. Fill Rate: volume ${fmtInt(c.frT[0])}, atendido ${fmtInt(c.frT[1])}.</p>`
+    :`<p class="hint">Sem perdas de Items Fill registradas em ${M}.</p>`;
+  $("comentario").value=sugerirTexto(c);
+  $("para").value=(c.mail?.to||[]).join("; ");
+  $("cc").value=(c.mail?.cc||[]).join("; ");
+  $("assunto").value=`[DECK DE RESULTADOS - ${M}] - ${c.nome}`;
+  $("secMail").hidden=true;
+}
+
+/* ---------- e-mail ---------- */
+function tabelaMeses(k,ano){
+  const td='style="padding:3px 6px;border:1px solid #d9d9d9;text-align:center;font:12px Arial,sans-serif"';
+  const th='style="padding:3px 6px;border:1px solid #d9d9d9;text-align:center;font:bold 12px Arial,sans-serif;background:#10284f;color:#fff"';
+  const linha=(rot,v,y)=>`<tr><td ${td}><b>${rot}</b></td><td ${td}>${y}</td>${v.map(x=>`<td ${td}>${x==null?"-":pct(x)}</td>`).join("")}</tr>`;
+  return`<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 18px">
+  <tr><th ${th}></th><th ${th}>YTD</th>${MESES.map(m=>`<th ${th}>${m}</th>`).join("")}</tr>
+  ${k.hasPrev?linha(ano-1,k.sp,pct(k.yp)):""}${linha(ano,k.s,pct(k.y))}</table>`;
+}
+function emailHTML(c,img){
+  const M=MESES_F[c.mes-1];
+  const nome=$("assNome").value.trim(),cargo=$("assCargo").value.trim(),mail=$("assEmail").value.trim();
+  const paras=$("comentario").value.split(/\n/).map(l=>l.trim()?`<p style="margin:0 0 6px;font:14px Calibri,Arial,sans-serif;color:#1b1b1b">${esc(l)}</p>`:`<div style="height:8px"></div>`).join("");
+  const cell='style="padding:6px 14px;text-align:center;font:14px Calibri,Arial,sans-serif;border-bottom:1px solid #e3e3e3"';
+  const head='style="padding:6px 14px;text-align:center;font:bold 13px Calibri,Arial,sans-serif;color:#555"';
+  const kpiRow=(nome,k)=>{
+    const cor=v=>v==null?"#1b1b1b":v>=0?"#1d8a52":"#c2402e";
+    return`<tr><td style="padding:6px 14px;font:bold 14px Calibri,Arial,sans-serif;color:#10284f;border-bottom:1px solid #e3e3e3">${nome}</td>
+      <td ${cell}>${pct(k.m1)}</td><td ${cell}><b>${pct(k.m0)}</b></td><td ${cell}><span style="color:${cor(k.dM)}">${pp(k.dM)}</span></td>
+      ${prev?`<td ${cell}>${pct(k.yp)}</td>`:""}<td ${cell}><b>${pct(k.y)}</b></td>${prev?`<td ${cell}><span style="color:${cor(k.vsAA)}">${relTxt(k.vsAA)}</span></td>`:""}</tr>`;};
+  const prev=c.fr.hasPrev||c.it.hasPrev;
+  return`<div style="font:14px Calibri,Arial,sans-serif;color:#1b1b1b;max-width:1100px">
+<p style="margin:0 0 10px;font:14px Calibri,Arial,sans-serif">${saudacao()} Time!</p>
+${paras}
+<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:16px 0 18px">
+<tr><td style="vertical-align:middle;padding:14px 22px;background:#10284f;color:#fff;text-align:center">
+  <div style="font:bold 12px Arial,sans-serif;letter-spacing:1px;color:#b9c8e6">REDE</div>
+  <div style="font:bold 22px Arial,sans-serif;color:#fff">${esc(c.rede)}</div>
+  <div style="font:12px Arial,sans-serif;color:#b9c8e6">${M} ${c.ano}</div></td>
+<td style="padding-left:18px;vertical-align:middle">
+<table cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+<tr><td></td><td ${head}>${MESES[(c.mes+10)%12]}</td><td ${head}>${MESES[c.mes-1]}</td><td ${head}>vs M-1</td>${prev?`<td ${head}>YTD ${String(c.ano-1).slice(2)}</td>`:""}<td ${head}>YTD ${String(c.ano).slice(2)}</td>${prev?`<td ${head}>vs ${String(c.ano-1).slice(2)}</td>`:""}</tr>
+${kpiRow("Fill Rate Data Original",c.fr)}${kpiRow("Items Fill",c.it)}
+</table></td></tr></table>
+<img src="${img.fr}" width="1000" alt="Fill Rate ${esc(c.rede)}" style="display:block;width:100%;max-width:1000px;height:auto;border:0">
+${tabelaMeses(c.fr,c.ano)}
+<img src="${img.it}" width="1000" alt="Items Fill ${esc(c.rede)}" style="display:block;width:100%;max-width:1000px;height:auto;border:0">
+${tabelaMeses(c.it,c.ano)}
+<p style="margin:14px 0 0;font:14px Calibri,Arial,sans-serif">Att,</p>
+${nome?`<p style="margin:6px 0 0;font:bold 14px Calibri,Arial,sans-serif">${esc(nome)}</p>`:""}
+${cargo?`<p style="margin:0;font:13px Calibri,Arial,sans-serif;color:#555">${esc(cargo)}</p>`:""}
+${mail?`<p style="margin:0;font:13px Calibri,Arial,sans-serif;color:#555">${esc(mail)}</p>`:""}
+</div>`;
+}
+function b64utf8(s){const b=new TextEncoder().encode(s);let bin="";for(let i=0;i<b.length;i+=0x8000)bin+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(bin);}
+const wrap76=s=>s.replace(/.{1,76}/g,"$&\r\n");
+const hdrEnc=s=>/^[\x20-\x7e]*$/.test(s)?s:`=?UTF-8?B?${b64utf8(s)}?=`;
+function buildEML(c){
+  const html=emailHTML(c,{fr:"cid:fillrate@deck",it:"cid:itemsfill@deck"});
+  const B="----=_Deck_"+Date.now().toString(36);
+  const to=cleanEmails($("para").value).join(", "),cc=cleanEmails($("cc").value).join(", ");
+  const png=ch=>ch.toBase64Image("image/png").split(",")[1];
+  const part=(cid,name,data)=>`--${B}\r\nContent-Type: image/png; name="${name}"\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <${cid}>\r\nContent-Disposition: inline; filename="${name}"\r\n\r\n${wrap76(data)}`;
+  return[
+    `To: ${to}`,cc?`Cc: ${cc}`:null,`Subject: ${hdrEnc($("assunto").value)}`,"X-Unsent: 1","MIME-Version: 1.0",
+    `Content-Type: multipart/related; boundary="${B}"; type="text/html"`,"",
+    `--${B}`,"Content-Type: text/html; charset=UTF-8","Content-Transfer-Encoding: base64","",
+    wrap76(b64utf8(`<!doctype html><html><head><meta charset="utf-8"></head><body>${html}</body></html>`)),
+    part("fillrate@deck","fill_rate.png",png(CH.fr)),
+    part("itemsfill@deck","items_fill.png",png(CH.it)),
+    `--${B}--`,""].filter(x=>x!==null).join("\r\n");
+}
+function download(name,content,type){
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+}
+const fileBase=c=>`Deck de Resultados - ${MESES_F[c.mes-1]} ${c.ano} - ${c.nome}`.replace(/[\\/:*?"<>|]/g,"");
+
+/* ---------- eventos ---------- */
+$("pick").onclick=()=>$("file").click();
+$("file").onchange=e=>e.target.files.length&&loadFiles([...e.target.files]);
+const dz=$("drop");
+["dragenter","dragover"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add("over");}));
+["dragleave","drop"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove("over");}));
+dz.addEventListener("drop",e=>e.dataTransfer.files.length&&loadFiles([...e.dataTransfer.files]));
+$("rede").onchange=update;$("mes").onchange=update;$("ano").onchange=()=>{fillMeses(false);update();};
+$("regen").onclick=()=>CUR&&($("comentario").value=sugerirTexto(CUR));
+["assNome","assCargo","assEmail"].forEach(id=>{$(id).value=store.get("deck."+id);$(id).addEventListener("input",()=>store.set("deck."+id,$(id).value));});
+$("confirmar").onclick=()=>{
+  if(!CUR)return;
+  $("mailPreview").innerHTML=emailHTML(CUR,{fr:CH.fr.toBase64Image(),it:CH.it.toBase64Image()});
+  $("secMail").hidden=false;$("mailStatus").textContent="";
+  $("secMail").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+};
+$("baixar").onclick=()=>{download(fileBase(CUR)+".eml",buildEML(CUR),"message/rfc822");$("mailStatus").className="status ok";$("mailStatus").textContent="E-mail baixado. Abra o arquivo para revisar no Outlook.";};
+$("baixarHtml").onclick=()=>download(fileBase(CUR)+".html",`<!doctype html><html><head><meta charset="utf-8"><title>${esc($("assunto").value)}</title></head><body>${$("mailPreview").innerHTML}</body></html>`,"text/html");
+$("copiar").onclick=async()=>{
+  const st=$("mailStatus");
+  try{
+    const html=$("mailPreview").innerHTML;
+    await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([$("mailPreview").innerText],{type:"text/plain"})})]);
+    st.className="status ok";st.textContent="Copiado. Cole no corpo de um novo e-mail.";
+  }catch(e){
+    const r=document.createRange();r.selectNodeContents($("mailPreview"));const s=getSelection();s.removeAllRanges();s.addRange(r);
+    st.className="status";st.textContent="Selecionei o e-mail. Use Ctrl+C para copiar.";
+  }
+};
+// Se a página estiver servida junto da planilha (ex.: GitHub Pages ou servidor local), tenta carregar sozinha.
+(async()=>{
+  if(location.protocol==="file:")return;
+  try{const r=await fetch("Deck de Resultados SP.xlsx");if(r.ok){const b=await r.blob();await loadFiles([new File([b],"Deck de Resultados SP.xlsx")]);}}catch(e){}
+})();
+</script>
+</body>
+</html>
