@@ -29,3 +29,11 @@ A planilha é lida só no navegador; nada é enviado para fora.
 - **Base_Items Fill**: `CÓD. REDE`, `REDE`, `nome_rede_pdv`, `ano`, `mes`, `DePara_motivos`, `Chaves Totais Items Fill`, `Chaves Items Fill`, `Perdas IF`.
 
 O gerador acha as abas pelos cabeçalhos, então os nomes das abas podem mudar, mas os cabeçalhos não. Sem a aba de e-mails, Para e Cópia são preenchidos na tela do gerador.
+
+## Base no formato da Tamiris (abas "KPI 25", "KPI 26")
+
+O gerador também lê a base semanal da Tamiris: abas com `cod_rede_pdv`, `Rede Nome`, `mes`, `Volume Total FR`, `Volume Atendido FR Aurora`, `Chaves Totais Items Fill` e `Chaves Items Fill`. Quando a aba não tem coluna `ano`, o ano vem do nome da aba (`KPI 25` = 2025).
+
+Com o ano anterior na base, a comparação segue o modelo dela: o acumulado do ano escolhido (De–Até) contra o **ano anterior completo** (Jan–Dez), e os gráficos mostram o ano anterior inteiro em cinza.
+
+Cada arquivo carregado substitui a base anterior. Para somar arquivos, solte todos juntos.

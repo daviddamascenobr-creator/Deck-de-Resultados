@@ -192,30 +192,36 @@ function findHeader(rows,must){
 }
 function col(idx,name){const j=idx[norm(name)];return j==null?-1:j;}
 
+// Ano pela aba quando a base não tem coluna "ano" (ex.: abas "KPI 25", "KPI 26" da base da Tamiris)
+function anoDoNome(sn){const m=String(sn).match(/(\d{4}|\d{2})\D*$/);if(!m)return 0;const n=+m[1];return n<100?2000+n:n;}
 function ingest(wb,fname){
   const out={fr:0,it:0,em:0};
   for(const sn of wb.SheetNames){
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});
-    let h;
-    if((h=findHeader(rows,["Volume Total FR","Volume Atendido FR Aurora","mes"]))){
-      const c={cod:col(h.idx,"CÓD. REDE"),rede:col(h.idx,"REDE"),nome:col(h.idx,"nome_rede_pdv"),ano:col(h.idx,"ano"),mes:col(h.idx,"mes"),
-        tot:col(h.idx,"Volume Total FR"),at:col(h.idx,"Volume Atendido FR Aurora"),cod2:col(h.idx,"cod_rede_pdv")};
+    const hF=findHeader(rows,["Volume Total FR","Volume Atendido FR Aurora","mes"]);
+    const hI=findHeader(rows,["Chaves Totais Items Fill","Chaves Items Fill","mes"]);
+    for(const [kind,h] of [["fr",hF],["it",hI]]){
+      if(!h)continue;
+      const c={cod:col(h.idx,"CÓD. REDE"),cod2:col(h.idx,"cod_rede_pdv"),rede:col(h.idx,"REDE"),nome:col(h.idx,"nome_rede_pdv"),nome2:col(h.idx,"Rede Nome"),
+        ano:col(h.idx,"ano"),mes:col(h.idx,"mes"),
+        tot:col(h.idx,kind==="fr"?"Volume Total FR":"Chaves Totais Items Fill"),ok:col(h.idx,kind==="fr"?"Volume Atendido FR Aurora":"Chaves Items Fill"),
+        per:col(h.idx,"Perdas IF"),mot:col(h.idx,"DePara_motivos")};
+      const anoAba=anoDoNome(sn);
+      if(c.ano<0&&!anoAba)continue;
       for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
-        const cod=num(x[c.cod]!=null?x[c.cod]:x[c.cod2]),ano=num(x[c.ano]),mes=num(x[c.mes]);
-        if(!cod||!ano||!mes)continue;
-        bump(DB.fr,[cod,ano,mes],[num(x[c.tot]),num(x[c.at])]);
-        regRede(cod,x[c.rede],x[c.nome]);out.fr++;}
-    } else if((h=findHeader(rows,["Chaves Totais Items Fill","Chaves Items Fill","mes"]))){
-      const c={cod:col(h.idx,"CÓD. REDE"),rede:col(h.idx,"REDE"),nome:col(h.idx,"nome_rede_pdv"),ano:col(h.idx,"ano"),mes:col(h.idx,"mes"),
-        tot:col(h.idx,"Chaves Totais Items Fill"),ok:col(h.idx,"Chaves Items Fill"),per:col(h.idx,"Perdas IF"),mot:col(h.idx,"DePara_motivos"),cat:col(h.idx,"categoria"),cod2:col(h.idx,"cod_rede_pdv")};
-      for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
-        const cod=num(x[c.cod]!=null?x[c.cod]:x[c.cod2]),ano=num(x[c.ano]),mes=num(x[c.mes]);
-        if(!cod||!ano||!mes)continue;
-        const tot=num(x[c.tot]),ok=num(x[c.ok]),pv=c.per>=0?x[c.per]:null,per=(pv==null||pv==="")?tot-ok:num(pv);
-        bump(DB.it,[cod,ano,mes],[tot,ok]);
-        if(per>0){let m=x[c.mot];m=(m==null||m===0||m==="0"||m==="")?"Sem motivo":String(m).trim();bump(DB.mot,[cod,ano,mes,m],[per]);}
-        regRede(cod,x[c.rede],x[c.nome]);out.it++;}
-    } else if((h=findHeader(rows,["Rede","To"]))){
+        const cod=num(c.cod>=0&&x[c.cod]!=null?x[c.cod]:x[c.cod2]),ano=c.ano>=0?num(x[c.ano]):anoAba,mes=num(x[c.mes]);
+        if(!cod||!ano||!mes||mes>12)continue;
+        const tot=num(x[c.tot]),ok=num(x[c.ok]);
+        regRede(cod,c.rede>=0?x[c.rede]:x[c.nome2],c.nome>=0?x[c.nome]:x[c.nome2]);
+        if(kind==="fr"){bump(DB.fr,[cod,ano,mes],[tot,ok]);out.fr++;continue;}
+        bump(DB.it,[cod,ano,mes],[tot,ok]);out.it++;
+        const pv=c.per>=0?x[c.per]:null,per=(pv==null||pv==="")?tot-ok:num(pv);
+        if(per>0&&c.mot>=0){let m=x[c.mot];m=(m==null||m===0||m==="0"||m==="")?"Sem motivo":String(m).trim();bump(DB.mot,[cod,ano,mes,m],[per]);}
+      }
+    }
+    if(hF||hI)continue;
+    const h=findHeader(rows,["Rede","To"]);
+    if(h){
       const c={cod:col(h.idx,"Número Rede"),rede:col(h.idx,"Rede"),to:col(h.idx,"To"),cc:col(h.idx,"Cópia")};
       for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
         const cod=num(x[c.cod]);if(!cod)continue;
@@ -230,6 +236,8 @@ function regRede(cod,rede,nome){const r=DB.redes[cod]??(DB.redes[cod]={cod});if(
 async function loadFiles(files){
   const st=$("loadStatus");st.className="status";st.textContent="Lendo planilha…";
   try{
+    // cada carga substitui a base anterior (vários arquivos soltos juntos são somados)
+    for(const k of ["fr","it","mot","redes","emails"])DB[k]={};DB.files=[];
     let tot={fr:0,it:0,em:0};
     for(const f of files){
       const buf=await f.arrayBuffer();
@@ -275,13 +283,15 @@ function ytd(src,cod,ano,de,ate){const o=(src[cod]||{})[ano]||{};let a=0,b=0;for
 function calc(){
   const cod=+$("rede").value,ano=+$("ano").value,mes=+$("mes").value,de=Math.min(+$("de").value||1,mes);
   const acLabel=de===1?`YTD ${ano}`:`Acum. ${MESES[de-1]}–${MESES[mes-1]}`;
-  const acShort=de===1?`YTD ${String(ano).slice(2)}`:`${MESES[de-1]}–${MESES[mes-1]}`;
+  const yy=String(ano).slice(2),yp=String(ano-1).slice(2),rng=`${MESES[de-1]}–${MESES[mes-1]}`;
+  const acShort=de===1?`YTD ${yy}`:`${rng} ${yy}`,acShortPrev=String(ano-1);
   const meses=[];for(let m=de;m<=mes;m++)meses.push(m);
   const r=DB.redes[cod]||{cod};
   const k=src=>{
     const s=serie(src,cod,ano),sp=serie(src,cod,ano-1);
     const m0=s[mes-1],m1=mes>1?s[mes-2]:serie(src,cod,ano-1)[11];
-    const y=ytd(src,cod,ano,de,mes),yp=ytd(src,cod,ano-1,de,mes);
+    // ano anterior entra completo (Jan–Dez), como no modelo da Tamiris
+    const y=ytd(src,cod,ano,de,mes),yp=ytd(src,cod,ano-1,1,12);
     const hasPrev=sp.some(v=>v!=null);
     return{s:s.map((v,i)=>i<mes?v:null),sp,m0,m1,dM:m0!=null&&m1!=null?m0-m1:null,y,yp:hasPrev?yp:null,vsAA:hasPrev?rel(y,yp):null,hasPrev,m0aa:sp[mes-1]};
   };
@@ -289,7 +299,10 @@ function calc(){
   const mot=Object.entries(motO).map(([m,v])=>({m,v:v[0]})).sort((a,b)=>b.v-a.v);
   const frT=(((DB.fr[cod]||{})[ano]||{})[mes])||[0,0];
   const itT=(((DB.it[cod]||{})[ano]||{})[mes])||[0,0];
-  return{cod,ano,mes,de,meses,acLabel,acShort,rede:r.rede||r.nome||String(cod),nome:r.nome||r.rede||String(cod),fr:k(DB.fr),it:k(DB.it),mot,frT,itT,mail:DB.emails[cod]};
+  const fr=k(DB.fr),it=k(DB.it),temPrev=fr.hasPrev||it.hasPrev;
+  // com base do ano anterior o eixo vai de Jan a Dez (ano anterior completo); sem ela, só o período escolhido
+  const eixo=temPrev?MESES.map((_,i)=>i+1):meses;
+  return{cod,ano,mes,de,meses,eixo,temPrev,acLabel,acShort,acShortPrev,rede:r.rede||r.nome||String(cod),nome:r.nome||r.rede||String(cod),fr,it,mot,frT,itT,mail:DB.emails[cod]};
 }
 
 /* ---------- texto sugerido ---------- */
@@ -301,7 +314,7 @@ function sugerirTexto(c){
     let t=`• ${nome} fechou ${M} em ${pct(k.m0)}`;
     if(k.dM!=null)t+=`, ${k.dM>=0?"alta":"queda"} de ${Math.abs(k.dM*100).toFixed(1).replace(".",",")} p.p. vs ${Mp} (${pct(k.m1)})`;
     t+=`. ${c.acLabel} em ${pct(k.y)}`;
-    if(k.vsAA!=null)t+=` (${relTxt(k.vsAA)} vs mesmo período de ${c.ano-1}: ${pct(k.yp)})`;
+    if(k.vsAA!=null)t+=` (${relTxt(k.vsAA)} vs ${c.ano-1}: ${pct(k.yp)})`;
     return t+".";
   };
   const tot=c.mot.reduce((a,b)=>a+b.v,0);
@@ -324,19 +337,21 @@ const labelsPlugin={id:"rotulos",
       meta.data.forEach((el,i)=>{
         const v=ds.data[i];if(v==null)return;
         if(ds._noLabel)return;
-        if(ds.type==="bar"&&i>0&&!ds._labelAll)return; // colunas mensais: o rótulo fica na linha
+        if(ds.type==="bar"&&i>=(ds._labelN||1)&&!ds._labelAll)return; // colunas mensais: o rótulo fica na linha
         if(ds._acc){ // linha tracejada do acumulado: um rótulo só, na ponta direita
           if(i!==ds.data.length-1)return;
           ctx.save();ctx.textAlign="left";ctx.font='700 13px "IBM Plex Sans",Arial,sans-serif';
           const t=ds._accLabel+" "+pct(v),w=ctx.measureText(t).width+12,x0=ch.chartArea.right+8;
           ctx.fillStyle="#e0a000";ctx.fillRect(x0,el.y-10,w,20);ctx.fillStyle="#fff";ctx.fillText(t,x0+6,el.y+5);ctx.restore();return;}
-        const isBar=ds.type==="bar",cur=ds._cur;
-        ctx.font=`${cur||isBar?"700":"600"} ${isBar?15:14}px "IBM Plex Sans",Arial,sans-serif`;
+        const isBar=ds.type==="bar",cur=ds._cur,prv=ds._prev;
+        const fs=ds._fs||(isBar?15:14);
+        ctx.font=`${prv?"600":"700"} ${fs}px "IBM Plex Sans",Arial,sans-serif`;
         const y=isBar?el.y-8:(cur?el.y-12:el.y+20);
+        const cor=prv||(isBar&&ds._greyIdx===i)?"#6f747d":C.navy;
         // fundo branco para não brigar com a outra linha
         const txt=pct(v);const w=ctx.measureText(txt).width+6;
         ctx.fillStyle="rgba(255,255,255,.85)";ctx.fillRect(el.x-w/2,y-14,w,17);
-        ctx.fillStyle=C.navy;
+        ctx.fillStyle=cor;
         ctx.fillText(txt,el.x,y);
       });
     });
@@ -346,6 +361,8 @@ const labelsPlugin={id:"rotulos",
     ctx.fillText(ic.titulo||"",14,a.top+6);
     ctx.font='600 13px "IBM Plex Sans",Arial,sans-serif';ctx.fillStyle="#555";ctx.fillText(ic.sub||"",14,a.top+26);
     if(ic.icone==="truck")drawTruck(ctx,22,a.top+52,90);else if(ic.icone==="bottles")drawBottles(ctx,26,a.top+44,80);
+    if(ic.legenda){const lx=14,ly=a.bottom-30;ctx.font='600 12px "IBM Plex Sans",Arial,sans-serif';
+      ic.legenda.forEach(([cor,t],j)=>{ctx.fillStyle=cor;ctx.fillRect(lx,ly+j*18,16,8);ctx.fillStyle="#333";ctx.fillText(t,lx+22,ly+8+j*18);});}
     ctx.restore();
   }};
 function drawTruck(ctx,x,y,w){const s=w/100;ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.strokeStyle="#111";ctx.lineWidth=7;ctx.lineJoin="round";ctx.lineCap="round";
@@ -359,31 +376,42 @@ function drawBottles(ctx,x,y,w){const s=w/100;ctx.save();ctx.translate(x,y);ctx.
   b(22,14,.78);b(78,14,.78);b(50,0,.95);ctx.restore();}
 
 function buildChart(canvas,k,c,titulo,sub,icone){
-  const vals=c.meses.map(m=>k.s[m-1]);
-  const labels=[c.acShort,...c.meses.map(m=>MESES[m-1])];
+  const naFaixa=m=>m>=c.de&&m<=c.mes;
+  const vals=c.eixo.map(m=>naFaixa(m)?k.s[m-1]:null);
+  const prev=c.temPrev?c.eixo.map(m=>k.sp[m-1]):null;
+  const mlab=c.eixo.map(m=>MESES[m-1]);
+  const acLbl=c.de===1?c.acShort:c.acShort.split(" "); // "Mai–Out 26" em duas linhas
+  const accL=c.temPrev?[c.acShortPrev,acLbl]:[acLbl],accV=c.temPrev?[k.yp,k.y]:[k.y];
+  const nA=accL.length,padA=v=>[...Array(nA).fill(null),...v];
+  const accCores=c.temPrev?[C.greyBar,C.navy]:[C.navy];
+  const linhaPrev=prev?{data:padA(prev),borderColor:"#a3a3a3",borderWidth:3,cubicInterpolationMode:"monotone",pointRadius:0,spanGaps:true,order:2,_prev:true,_fs:12}:null;
   const estilo=$("estilo").value||"combo";
-  let ds,lbls=labels;
+  let ds,lbls=[...accL,...mlab];
   if(estilo==="linha"){
-    // YTD em coluna + linha mês a mês com área preenchida
-    ds=[{type:"bar",data:[k.y,...vals.map(()=>null)],backgroundColor:[C.navy],barPercentage:.7,categoryPercentage:.8,order:3},
-        {data:[null,...vals],borderColor:C.navy,borderWidth:3,backgroundColor:"rgba(63,116,214,.16)",fill:"origin",cubicInterpolationMode:"monotone",pointRadius:5,pointBackgroundColor:"#fff",pointBorderColor:C.navy,pointBorderWidth:3,spanGaps:true,order:1,_cur:true}];
+    // acumulados em coluna + linha mês a mês com área preenchida
+    ds=[{type:"bar",data:[...accV,...vals.map(()=>null)],backgroundColor:accCores,barPercentage:.7,categoryPercentage:.8,order:3,_labelN:nA,_greyIdx:c.temPrev?0:-1},
+        {data:padA(vals),borderColor:C.navy,borderWidth:3,backgroundColor:"rgba(63,116,214,.16)",fill:"origin",cubicInterpolationMode:"monotone",pointRadius:5,pointBackgroundColor:"#fff",pointBorderColor:C.navy,pointBorderWidth:3,spanGaps:false,order:1,_cur:true}];
+    if(linhaPrev)ds.push(linhaPrev);
   }else if(estilo==="colunas"){
-    // só os meses em colunas (último mês em destaque) + linha tracejada do acumulado
-    lbls=c.meses.map(m=>MESES[m-1]);
-    ds=[{type:"bar",data:vals,backgroundColor:vals.map((_,i)=>i===vals.length-1?C.navy:C.blue),barPercentage:.72,categoryPercentage:.8,order:3,_labelAll:true},
-        {data:vals.map(()=>k.y),borderColor:"#e0a000",borderWidth:2.5,borderDash:[8,6],pointRadius:0,order:1,_acc:true,_accLabel:c.acShort}];
+    // colunas por mês (ano anterior ao lado, em cinza) + linha tracejada do acumulado
+    lbls=mlab;
+    ds=[{type:"bar",data:vals,backgroundColor:c.eixo.map(m=>m===c.mes?C.navy:C.blue),barPercentage:.9,categoryPercentage:.78,order:3,_labelAll:true,_fs:c.temPrev?12:15}];
+    if(prev)ds.unshift({type:"bar",data:prev,backgroundColor:"#bdbdbd",barPercentage:.9,categoryPercentage:.78,order:4,_labelAll:true,_prev:true,_fs:11});
+    ds.push({data:c.eixo.map(()=>k.y),borderColor:"#e0a000",borderWidth:2.5,borderDash:[8,6],pointRadius:0,order:1,_acc:true,_accLabel:c.acShort});
   }else{
-    ds=[{type:"bar",data:[k.y,...vals],backgroundColor:[C.navy,...vals.map(()=>"#b8cbee")],barPercentage:.78,categoryPercentage:.8,order:3},
-        {label:String(c.ano),data:[null,...vals],borderColor:C.blue,borderWidth:4,cubicInterpolationMode:"monotone",pointRadius:5,pointBackgroundColor:C.navy,pointBorderColor:"#fff",pointBorderWidth:2,spanGaps:true,order:1,_cur:true}];
+    ds=[{type:"bar",data:[...accV,...vals],backgroundColor:[...accCores,...vals.map(()=>"#b8cbee")],barPercentage:.78,categoryPercentage:.8,order:3,_labelN:nA,_greyIdx:c.temPrev?0:-1},
+        {data:padA(vals),borderColor:C.blue,borderWidth:4,cubicInterpolationMode:"monotone",pointRadius:5,pointBackgroundColor:C.navy,pointBorderColor:"#fff",pointBorderWidth:2,spanGaps:false,order:1,_cur:true}];
+    if(linhaPrev)ds.push(linhaPrev);
   }
+  const legenda=c.temPrev?[[C.navy,String(c.ano)],["#a3a3a3",String(c.ano-1)]]:null;
   const cfg={type:"line",
     data:{labels:lbls,datasets:ds},
     options:{responsive:false,animation:false,devicePixelRatio:2,
       layout:{padding:{left:150,right:estilo==="colunas"?120:20,top:34,bottom:4}},
-      scales:{y:{display:false,min:0,max:1.12},x:{grid:{display:false},border:{display:false},ticks:{color:"#222",font:{weight:"700",size:14,family:'"IBM Plex Sans",Arial,sans-serif'}}}},
-      plugins:{legend:{display:false},tooltip:{enabled:false},rotulos:{titulo,sub,icone}}},
+      scales:{y:{display:false,min:0,max:1.12},x:{grid:{display:false},border:{display:false},ticks:{maxRotation:0,autoSkip:false,color:"#222",font:{weight:"700",size:14,family:'"IBM Plex Sans",Arial,sans-serif'}}}},
+      plugins:{legend:{display:false},tooltip:{enabled:false},rotulos:{titulo,sub,icone,legenda}}},
     plugins:[labelsPlugin]};
-  canvas.width=1100;canvas.height=280;
+  canvas.width=estilo==="colunas"&&c.temPrev?1200:1100;canvas.height=290;
   return new Chart(canvas,cfg);
 }
 
@@ -395,7 +423,8 @@ function kpiCard(nome,k,c){
   <div class="grid">
     <div><span>${MESES[(c.mes+10)%12]} (M-1)</span><strong>${pct(k.m1)}</strong></div>
     <div><span>${c.acLabel}</span><strong>${pct(k.y)}</strong></div>
-  </div></div>`;
+    ${k.hasPrev?`<div><span>${c.acShortPrev}</span><strong>${pct(k.yp)}</strong></div>`:""}
+  </div>${k.vsAA!=null?`<div class="hint">${c.acShort} vs ${c.ano-1} (ano completo): <strong class="${cls(k.vsAA)}">${relTxt(k.vsAA)}</strong></div>`:""}</div>`;
 }
 function update(){
   if(!$("rede").value)return;
@@ -416,10 +445,10 @@ function update(){
 function tabelaMeses(k,c){
   const td='style="padding:3px 6px;border:1px solid #d9d9d9;text-align:center;font:12px Arial,sans-serif"';
   const th='style="padding:3px 6px;border:1px solid #d9d9d9;text-align:center;font:bold 12px Arial,sans-serif;background:#10284f;color:#fff"';
-  const linha=(rot,v,y)=>`<tr><td ${td}><b>${rot}</b></td><td ${td}>${y}</td>${c.meses.map(m=>`<td ${td}>${v[m-1]==null?"-":pct(v[m-1])}</td>`).join("")}</tr>`;
+  const linha=(rot,v,y,ok)=>`<tr><td ${td}><b>${rot}</b></td><td ${td}>${y}</td>${c.eixo.map(m=>`<td ${td}>${!ok(m)||v[m-1]==null?"-":pct(v[m-1])}</td>`).join("")}</tr>`;
   return`<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 18px">
-  <tr><th ${th}></th><th ${th}>${c.acShort}</th>${c.meses.map(m=>`<th ${th}>${MESES[m-1]}</th>`).join("")}</tr>
-  ${linha(c.ano,k.s,pct(k.y))}</table>`;
+  <tr><th ${th}></th><th ${th}>${c.temPrev?"Acum.":c.de===1?"YTD":"Acum."}</th>${c.eixo.map(m=>`<th ${th}>${MESES[m-1]}</th>`).join("")}</tr>
+  ${k.hasPrev?linha(c.ano-1,k.sp,pct(k.yp),()=>true):""}${linha(c.ano,k.s,pct(k.y),m=>m>=c.de&&m<=c.mes)}</table>`;
 }
 function emailHTML(c,img){
   const M=MESES_F[c.mes-1];
@@ -443,7 +472,7 @@ ${paras}
   <div style="font:12px Arial,sans-serif;color:#b9c8e6">${M} ${c.ano}</div></td>
 <td style="padding-left:18px;vertical-align:middle">
 <table cellpadding="0" cellspacing="0" style="border-collapse:collapse">
-<tr><td></td><td ${head}>${MESES[(c.mes+10)%12]}</td><td ${head}>${MESES[c.mes-1]}</td><td ${head}>vs M-1</td>${prev?`<td ${head}>${c.acShort.replace(/\d\d$/,String(c.ano-1).slice(2))}${c.de===1?"":" "+(c.ano-1)}</td>`:""}<td ${head}>${c.acShort}</td>${prev?`<td ${head}>vs ${String(c.ano-1).slice(2)}</td>`:""}</tr>
+<tr><td></td><td ${head}>${MESES[(c.mes+10)%12]}</td><td ${head}>${MESES[c.mes-1]}</td><td ${head}>vs M-1</td>${prev?`<td ${head}>${c.acShortPrev}</td>`:""}<td ${head}>${c.acShort}</td>${prev?`<td ${head}>vs ${String(c.ano-1).slice(2)}</td>`:""}</tr>
 ${kpiRow("Fill Rate Data Original",c.fr)}${kpiRow("Items Fill",c.it)}
 </table></td></tr></table>
 <img src="${img.fr}" width="1000" alt="Fill Rate ${esc(c.rede)}" style="display:block;width:100%;max-width:1000px;height:auto;border:0">
