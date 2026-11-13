@@ -205,7 +205,7 @@ function ingest(wb,fname){
       for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
         const cod=num(x[c.cod]!=null?x[c.cod]:x[c.cod2]),ano=num(x[c.ano]),mes=num(x[c.mes]);
         if(!cod||!ano||!mes)continue;
-        const tot=num(x[c.tot]),ok=num(x[c.ok]),per=c.per>=0?num(x[c.per]):tot-ok;
+        const tot=num(x[c.tot]),ok=num(x[c.ok]),pv=c.per>=0?x[c.per]:null,per=(pv==null||pv==="")?tot-ok:num(pv);
         bump(DB.it,[cod,ano,mes],[tot,ok]);
         if(per>0){let m=x[c.mot];m=(m==null||m===0||m==="0"||m==="")?"Sem motivo":String(m).trim();bump(DB.mot,[cod,ano,mes,m],[per]);}
         regRede(cod,x[c.rede],x[c.nome]);out.it++;}

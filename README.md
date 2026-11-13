@@ -20,3 +20,13 @@ A planilha é lida só no navegador; nada é enviado para fora.
 - **vs ano anterior** = variação relativa entre os YTDs (só aparece se houver base do ano anterior).
 - **Motivos de perda** (no texto sugerido) = soma de `Perdas IF` por `DePara_motivos` no mês.
 - Destinatários vêm da aba `Base email`, cruzando `Número Rede` com `CÓD. REDE`.
+
+## Planilha modelo
+
+`Planilha Modelo - Deck de Resultados.xlsx` traz só o que o gerador precisa, com instruções na primeira aba e linhas de exemplo (SONDA, 2026) em amarelo:
+
+- **Base_Fill Rate**: `CÓD. REDE`, `REDE`, `nome_rede_pdv`, `ano`, `mes`, `Volume Total FR`, `Volume Atendido FR Aurora`.
+- **Base_Items Fill**: `CÓD. REDE`, `REDE`, `nome_rede_pdv`, `ano`, `mes`, `DePara_motivos`, `Chaves Totais Items Fill`, `Chaves Items Fill`, `Perdas IF`.
+- **Base email**: `Número Rede`, `Rede`, `To`, `Cópia`.
+
+O gerador acha as abas pelos cabeçalhos, então os nomes das abas podem mudar, mas os cabeçalhos não.
