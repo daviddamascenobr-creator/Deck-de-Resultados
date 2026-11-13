@@ -100,7 +100,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
   <section class="panel" id="secSel" hidden>
     <div class="step"><b>2</b><h2>Escolher rede e mês</h2></div>
     <div class="controls">
-      <label for="rede">Rede<select id="rede"></select></label>
+      <label for="redeBusca">Rede · digite para buscar<input type="text" id="redeBusca" list="redeLista" autocomplete="off" placeholder="Ex.: Sonda ou 21" spellcheck="false"><datalist id="redeLista"></datalist><select id="rede" hidden aria-hidden="true"></select><span class="hint" id="redeAviso" role="status"></span></label>
       <label for="ano">Ano<select id="ano"></select></label>
       <label for="de">De<select id="de"></select></label>
       <label for="mes">Até (mês de fechamento)<select id="mes"></select></label>
@@ -255,11 +255,30 @@ async function loadFiles(files){
 /* ---------- seletores ---------- */
 function anos(){const s=new Set();for(const c in DB.fr)for(const a in DB.fr[c])s.add(+a);for(const c in DB.it)for(const a in DB.it[c])s.add(+a);return[...s].sort();}
 function mesesDe(ano){const s=new Set();for(const c in DB.fr)for(const m in (DB.fr[c][ano]||{}))s.add(+m);for(const c in DB.it)for(const m in (DB.it[c][ano]||{}))s.add(+m);return[...s].sort((a,b)=>a-b);}
+const rotuloRede=r=>r?`${r.rede||r.nome} · ${r.cod}`:"";
+// busca da rede: aceita o nome (ou parte dele) ou o código
+function escolherRede(final){
+  const t=norm($("redeBusca").value),av=$("redeAviso");av.textContent="";
+  if(!t)return;
+  const redes=Object.values(DB.redes);
+  let r=redes.find(x=>norm(rotuloRede(x))===t)||redes.find(x=>String(x.cod)===t);
+  if(!r&&final){
+    const cand=redes.filter(x=>norm(x.rede).includes(t)||norm(x.nome).includes(t))
+      .sort((a,b)=>(norm(a.rede||a.nome).startsWith(t)?0:1)-(norm(b.rede||b.nome).startsWith(t)?0:1)||(a.rede||a.nome||"").localeCompare(b.rede||b.nome||"","pt-BR"));
+    r=cand[0];
+    if(!r){av.textContent="Nenhuma rede encontrada com esse nome ou código.";return;}
+  }
+  if(!r)return;
+  $("redeBusca").value=rotuloRede(r);
+  if(String(r.cod)!==$("rede").value){$("rede").value=r.cod;update();}
+}
 function fillSelectors(){
   const redes=Object.values(DB.redes).sort((a,b)=>(a.rede||a.nome||"").localeCompare(b.rede||b.nome||"","pt-BR"));
   const sel=$("rede"),prev=sel.value||store.get("deck.rede");
   sel.innerHTML=redes.map(r=>`<option value="${r.cod}">${esc(r.rede||r.nome)} · ${r.cod}${Object.keys(DB.emails).length&&!DB.emails[r.cod]?" (sem e-mail)":""}</option>`).join("");
   if(prev&&DB.redes[prev])sel.value=prev;
+  $("redeLista").innerHTML=redes.map(r=>`<option value="${esc(rotuloRede(r))}"></option>`).join("");
+  $("redeBusca").value=rotuloRede(DB.redes[sel.value]);
   const as=anos(),ys=$("ano");ys.innerHTML=as.map(a=>`<option>${a}</option>`).join("");ys.value=as[as.length-1];
   fillMeses(true);
   $("baseInfo").textContent=`${redes.length} redes · ${as.join(", ")} · ${DB.files.join(" + ")}`;
@@ -337,6 +356,10 @@ const labelsPlugin={id:"rotulos",
     ctx.restore();},
   afterDatasetsDraw(ch){
     const{ctx}=ch;ctx.save();ctx.textAlign="center";
+    // 1) junta os rótulos; 2) escolhe o lado (acima/abaixo) longe da outra linha; 3) afasta os que se sobrepõem
+    const labs=[],pontos={};
+    ch.data.datasets.forEach((ds,di)=>{const meta=ch.getDatasetMeta(di);if(meta.hidden||ds.type==="bar"||ds._acc)return;
+      meta.data.forEach((el,i)=>{if(ds.data[i]!=null)(pontos[i]??(pontos[i]=[])).push({y:el.y,ds});});});
     ch.data.datasets.forEach((ds,di)=>{
       const meta=ch.getDatasetMeta(di);if(meta.hidden)return;
       meta.data.forEach((el,i)=>{
@@ -348,18 +371,34 @@ const labelsPlugin={id:"rotulos",
           ctx.save();ctx.textAlign="left";ctx.font='700 13px "IBM Plex Sans",Arial,sans-serif';
           const t=ds._accLabel+" "+pct(v),w=ctx.measureText(t).width+12,x0=ch.chartArea.right+8;
           ctx.fillStyle="#e0a000";ctx.fillRect(x0,el.y-10,w,20);ctx.fillStyle="#fff";ctx.fillText(t,x0+6,el.y+5);ctx.restore();return;}
-        const isBar=ds.type==="bar",cur=ds._cur,prv=ds._prev;
+        const isBar=ds.type==="bar",prv=ds._prev;
         const fs=ds._fs||(isBar?15:14);
-        ctx.font=`${prv?"600":"700"} ${fs}px "IBM Plex Sans",Arial,sans-serif`;
-        const y=isBar?el.y-8:(cur?el.y-12:el.y+20);
-        const cor=prv||(isBar&&ds._greyIdx===i)?"#6f747d":C.navy;
-        // fundo branco para não brigar com a outra linha
-        const txt=pct(v);const w=ctx.measureText(txt).width+6;
-        ctx.fillStyle="rgba(255,255,255,.85)";ctx.fillRect(el.x-w/2,y-14,w,17);
-        ctx.fillStyle=cor;
-        ctx.fillText(txt,el.x,y);
+        const font=`${prv?"600":"700"} ${fs}px "IBM Plex Sans",Arial,sans-serif`;ctx.font=font;
+        const txt=pct(v),w=ctx.measureText(txt).width+6;
+        let dir=-1; // -1 acima, +1 abaixo
+        if(!isBar){
+          const outro=(pontos[i]||[]).find(p=>p.ds!==ds);
+          dir=outro?(el.y<=outro.y?-1:1):(prv?1:-1);
+        }
+        const top=dir<0?(isBar?el.y-8:el.y-10)-fs:el.y+8;
+        labs.push({x:el.x,top,h:fs+4,w,dir,txt,font,fs,cor:prv||(isBar&&ds._greyIdx===i)?"#6f747d":C.navy,pri:prv?1:0});
       });
     });
+    const H=ch.height,cruza=(a,b)=>Math.abs(a.x-b.x)<(a.w+b.w)/2&&a.top<b.top+b.h&&b.top<a.top+a.h;
+    labs.sort((a,b)=>a.pri-b.pri);
+    const fixos=[];
+    for(const L of labs){
+      for(let tent=0;tent<12;tent++){
+        const c=fixos.find(P=>cruza(L,P));if(!c)break;
+        if(L.dir<0)L.top=c.top-L.h-1;else L.top=c.top+c.h+1;
+        if(L.top<2||L.top+L.h>H-2){L.dir=-L.dir;L.top=Math.max(2,Math.min(H-2-L.h,L.top));}
+      }
+      fixos.push(L);
+    }
+    for(const L of fixos){
+      ctx.font=L.font;ctx.fillStyle="rgba(255,255,255,.88)";ctx.fillRect(L.x-L.w/2,L.top,L.w,L.h);
+      ctx.fillStyle=L.cor;ctx.fillText(L.txt,L.x,L.top+L.fs);
+    }
     // ícone + título à esquerda
     const ic=ch.options.plugins.rotulos||{};const a=ch.chartArea;
     ctx.textAlign="left";ctx.fillStyle=C.navy;ctx.font='700 22px "Barlow Condensed","Arial Narrow",Arial,sans-serif';
@@ -531,6 +570,10 @@ const dz=$("drop");
 ["dragleave","drop"].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove("over");}));
 dz.addEventListener("drop",e=>e.dataTransfer.files.length&&loadFiles([...e.dataTransfer.files]));
 $("rede").onchange=update;
+$("redeBusca").addEventListener("input",()=>escolherRede(false));
+$("redeBusca").addEventListener("change",()=>escolherRede(true));
+$("redeBusca").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();escolherRede(true);}});
+$("redeBusca").addEventListener("focus",e=>e.target.select());
 $("estilo").value=store.get("deck.estilo")||"combo";
 $("estilo").onchange=()=>{store.set("deck.estilo",$("estilo").value);if(!CUR)return;
   CH.fr&&CH.fr.destroy();CH.it&&CH.it.destroy();
