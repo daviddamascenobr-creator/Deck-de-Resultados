@@ -10,6 +10,8 @@ Gerador do e-mail mensal de **Fill Rate Data Original** e **Items Fill** por red
 4. Escolha o **modelo de gráfico** (colunas + linha, linha com área, colunas + acumulado ou linhas sobrepostas; a escolha fica salva no navegador), confira os KPIs e ajuste o comentário, os destinatários e a assinatura.
 5. Clique em **Confirmar e gerar modelo de e-mail** e depois em **Baixar e-mail (.eml)**. O arquivo abre no Outlook como rascunho, com Para, Cópia, assunto e gráficos.
 
+6. Para várias redes de uma vez, use o passo **Gerar várias redes**: marque as redes (ou "Marcar as que têm e-mail"), clique em **Conferir** para ver a tabela de KPIs e depois em **Confirmar e baixar**. Sai um `.zip` com um `.eml` por rede, com Para e Cópia da aba `Base email` e o texto sugerido de cada rede.
+
 A planilha é lida só no navegador; nada é enviado para fora.
 
 ## Como os números são calculados
@@ -27,7 +29,7 @@ A planilha é lida só no navegador; nada é enviado para fora.
 
 `Rede_Semana`, `Rede_Mes`, `Rede Nome`, `x`, `cod_rede_pdv`, `mes`, `semana_do_ano`, `% FR Data Original`, `% Items Fill`, `Volume Total FR`, `Volume Atendido FR Aurora`, `Chaves Totais Items Fill`, `Chaves Items Fill`.
 
-O gerador usa `cod_rede_pdv`, `Rede Nome`, `mes` e os quatro volumes. As colunas de % e as chaves `Rede_*` são só conferência. Pode ser uma linha por semana ou por mês. Para Para e Cópia, preencha na tela.
+O gerador usa `cod_rede_pdv`, `Rede Nome`, `mes` e os quatro volumes. As colunas de % e as chaves `Rede_*` são só conferência. Pode ser uma linha por semana ou por mês. A aba `Base email` (`Número Rede`, `Rede`, `To`, `Cópia`) guarda os destinatários de cada rede; se o de-para mudar, é só editar essa aba.
 
 ## Base com abas por ano ("KPI 25", "KPI 26")
 
