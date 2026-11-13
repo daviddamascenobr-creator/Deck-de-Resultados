@@ -6,7 +6,7 @@ Gerador do e-mail mensal de **Fill Rate Data Original** e **Items Fill** por red
 
 1. Abra o `index.html` no navegador (Chrome ou Edge). Precisa de internet para carregar as bibliotecas de planilha e gráfico.
 2. (Opcional) Clique em **Baixar planilha modelo** para pegar o modelo em branco. Depois clique em **Escolher arquivo** (ou arraste) e selecione o `Deck de Resultados SP.xlsx`. Dá para soltar mais de um arquivo, por exemplo uma base de 2025, para ter a comparação com o ano anterior.
-3. Digite o nome ou o código da **rede** para buscar, escolha, o **ano** e o período **De – Até** (por padrão, de janeiro até o mês anterior ao atual). Os gráficos mostram só os meses do período.
+3. Digite o nome ou o código da **rede** para buscar e escolha o **ano** e o período **De – Até** (por padrão, de janeiro até o mês anterior ao atual).
 4. Escolha o **modelo de gráfico** (colunas + linha, linha com área, colunas + acumulado ou linhas sobrepostas; a escolha fica salva no navegador), confira os KPIs e ajuste o comentário, os destinatários e a assinatura.
 5. Clique em **Confirmar e gerar modelo de e-mail** e depois em **Baixar e-mail (.eml)**. O arquivo abre no Outlook como rascunho, com Para, Cópia, assunto e gráficos.
 
