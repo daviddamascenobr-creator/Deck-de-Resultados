@@ -27,6 +27,5 @@ A planilha é lida só no navegador; nada é enviado para fora.
 
 - **Base_Fill Rate**: `CÓD. REDE`, `REDE`, `nome_rede_pdv`, `ano`, `mes`, `Volume Total FR`, `Volume Atendido FR Aurora`.
 - **Base_Items Fill**: `CÓD. REDE`, `REDE`, `nome_rede_pdv`, `ano`, `mes`, `DePara_motivos`, `Chaves Totais Items Fill`, `Chaves Items Fill`, `Perdas IF`.
-- **Base email**: `Número Rede`, `Rede`, `To`, `Cópia`.
 
-O gerador acha as abas pelos cabeçalhos, então os nomes das abas podem mudar, mas os cabeçalhos não.
+O gerador acha as abas pelos cabeçalhos, então os nomes das abas podem mudar, mas os cabeçalhos não. Sem a aba de e-mails, Para e Cópia são preenchidos na tela do gerador.

@@ -232,7 +232,7 @@ async function loadFiles(files){
     }
     if(!Object.keys(DB.redes).length) throw new Error("Não achei as abas de Fill Rate ou Items Fill. Confira se é a planilha do Deck de Resultados.");
     st.className="status ok";
-    st.textContent=`Base carregada: ${fmtInt(tot.fr)} linhas de Fill Rate, ${fmtInt(tot.it)} de Items Fill, ${tot.em} redes com e-mail.`;
+    st.textContent=`Base carregada: ${fmtInt(tot.fr)} linhas de Fill Rate, ${fmtInt(tot.it)} de Items Fill, ${tot.em?tot.em+" redes com e-mail.":"sem aba de e-mails (preencha Para e Cópia na tela)."}`;
     fillSelectors();
   }catch(e){console.error(e);st.className="status err";st.textContent="Não consegui ler o arquivo: "+e.message;}
 }
@@ -243,7 +243,7 @@ function mesesDe(ano){const s=new Set();for(const c in DB.fr)for(const m in (DB.
 function fillSelectors(){
   const redes=Object.values(DB.redes).sort((a,b)=>(a.rede||a.nome||"").localeCompare(b.rede||b.nome||"","pt-BR"));
   const sel=$("rede"),prev=sel.value||store.get("deck.rede");
-  sel.innerHTML=redes.map(r=>`<option value="${r.cod}">${esc(r.rede||r.nome)} · ${r.cod}${DB.emails[r.cod]?"":" (sem e-mail)"}</option>`).join("");
+  sel.innerHTML=redes.map(r=>`<option value="${r.cod}">${esc(r.rede||r.nome)} · ${r.cod}${Object.keys(DB.emails).length&&!DB.emails[r.cod]?" (sem e-mail)":""}</option>`).join("");
   if(prev&&DB.redes[prev])sel.value=prev;
   const as=anos(),ys=$("ano");ys.innerHTML=as.map(a=>`<option>${a}</option>`).join("");ys.value=as[as.length-1];
   fillMeses(true);
