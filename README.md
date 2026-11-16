@@ -22,6 +22,7 @@ A planilha é lida só no navegador; nada é enviado para fora.
 - **vs ano anterior** = variação relativa entre os YTDs (só aparece se houver base do ano anterior).
 - **Motivos de perda** (no texto sugerido) = soma de `Perdas IF` por `DePara_motivos` no mês.
 - Destinatários vêm da aba `Base email`, cruzando `Número Rede` com `CÓD. REDE`.
+- **Redes agrupadas**: a rede D´Avó (código 44) soma as lojas Poupaki (código 1600) e aparece como `D´AVÓ + POUPAKI`. Fill Rate e Items Fill do total vêm da soma dos volumes das duas bandeiras, e o e-mail traz uma tabela de abertura por bandeira. Para agrupar outra rede, acrescente uma linha em `GRUPOS` no `index.html`.
 
 ## Planilha modelo
 

@@ -192,7 +192,11 @@ const C={navy:"#10284f",blue:"#3f74d6",grey:"#8a8f99",greyBar:"#9a9a9a",ink:"#1b
 const $=id=>document.getElementById(id);
 
 /* ---------- estado ---------- */
-const DB={fr:{},it:{},mot:{},redes:{},emails:{},files:[]};
+const DB={fr:{},it:{},mot:{},redes:{},emails:{},band:{fr:{},it:{}},files:[]};
+// Redes agrupadas: os códigos de cada bandeira somam no total da rede (Poupaki faz parte da rede D´Avó).
+// Para agrupar outra rede, acrescente uma linha aqui.
+const GRUPOS=[{cod:44,nome:"D´AVÓ + POUPAKI",bandeiras:{44:"D´Avó",1600:"Poupaki"}}];
+const GRUPO_DE={};GRUPOS.forEach(g=>Object.keys(g.bandeiras).forEach(c=>GRUPO_DE[c]=g));
 let CH={fr:null,it:null};
 let CUR=null;   // cálculo da rede/mês selecionados
 
@@ -236,10 +240,11 @@ function ingest(wb,fname){
       const anoAba=anoDoNome(sn);
       if(c.ano<0&&!anoAba)continue;
       for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
-        const cod=num(c.cod>=0&&x[c.cod]!=null?x[c.cod]:x[c.cod2]),ano=c.ano>=0?num(x[c.ano]):anoAba,mes=num(x[c.mes]);
-        if(!cod||!ano||!mes||mes>12)continue;
-        const tot=num(x[c.tot]),ok=num(x[c.ok]);
-        regRede(cod,c.rede>=0?x[c.rede]:x[c.nome2],c.nome>=0?x[c.nome]:x[c.nome2]);
+        const bruto=num(c.cod>=0&&x[c.cod]!=null?x[c.cod]:x[c.cod2]),ano=c.ano>=0?num(x[c.ano]):anoAba,mes=num(x[c.mes]);
+        if(!bruto||!ano||!mes||mes>12)continue;
+        const tot=num(x[c.tot]),ok=num(x[c.ok]),g=GRUPO_DE[bruto],cod=g?g.cod:bruto;
+        if(g){bump(DB.band[kind],[bruto,ano,mes],[tot,ok]);regRede(cod,g.nome,g.nome);}
+        else regRede(cod,c.rede>=0?x[c.rede]:x[c.nome2],c.nome>=0?x[c.nome]:x[c.nome2]);
         if(kind==="fr"){bump(DB.fr,[cod,ano,mes],[tot,ok]);out.fr++;continue;}
         bump(DB.it,[cod,ano,mes],[tot,ok]);out.it++;
         const pv=c.per>=0?x[c.per]:null,per=(pv==null||pv==="")?tot-ok:num(pv);
@@ -251,8 +256,10 @@ function ingest(wb,fname){
     if(h){
       const c={cod:col(h.idx,"Número Rede"),rede:col(h.idx,"Rede"),to:col(h.idx,"To"),cc:col(h.idx,"Cópia")};
       for(let r=h.i+1;r<rows.length;r++){const x=rows[r];if(!x)continue;
-        const cod=num(x[c.cod]);if(!cod)continue;
-        DB.emails[cod]={rede:x[c.rede],to:cleanEmails(x[c.to]),cc:cleanEmails(c.cc>=0?x[c.cc]:"")};out.em++;}
+        const bruto=num(x[c.cod]);if(!bruto)continue;
+        const g=GRUPO_DE[bruto],cod=g?g.cod:bruto,to=cleanEmails(x[c.to]),cc=cleanEmails(c.cc>=0?x[c.cc]:"");
+        if(g&&DB.emails[cod]){const e=DB.emails[cod];e.to=cleanEmails(e.to.concat(to).join(";"));e.cc=cleanEmails(e.cc.concat(cc).join(";"));continue;}
+        DB.emails[cod]={rede:g?g.nome:x[c.rede],to,cc};out.em++;}
     }
   }
   DB.files.push(fname);
@@ -264,7 +271,7 @@ async function loadFiles(files){
   const st=$("loadStatus");st.className="status";st.textContent="Lendo planilha…";
   try{
     // cada carga substitui a base anterior (vários arquivos soltos juntos são somados)
-    for(const k of ["fr","it","mot","redes","emails"])DB[k]={};DB.files=[];
+    for(const k of ["fr","it","mot","redes","emails"])DB[k]={};DB.band={fr:{},it:{}};DB.files=[];
     let tot={fr:0,it:0,em:0};
     for(const f of files){
       const buf=await f.arrayBuffer();
@@ -346,9 +353,11 @@ function calc(codArg){
   const frT=(((DB.fr[cod]||{})[ano]||{})[mes])||[0,0];
   const itT=(((DB.it[cod]||{})[ano]||{})[mes])||[0,0];
   const fr=k(DB.fr),it=k(DB.it),temPrev=fr.hasPrev||it.hasPrev;
+  const g=GRUPOS.find(x=>x.cod===cod);
+  const band=g?Object.entries(g.bandeiras).map(([bc,bn])=>{const kb=src=>({m0:serie(src,bc,ano)[mes-1],y:ytd(src,bc,ano,de,mes)});return{nome:bn,cod:+bc,fr:kb(DB.band.fr),it:kb(DB.band.it)};}).filter(b=>b.fr.y!=null||b.it.y!=null):[];
   // com base do ano anterior o eixo vai de Jan a Dez (ano anterior completo); sem ela, só o período escolhido
   const eixo=temPrev?MESES.map((_,i)=>i+1):meses;
-  return{cod,ano,mes,de,meses,eixo,temPrev,acLabel,acShort,acShortPrev,rede:r.rede||r.nome||String(cod),nome:r.nome||r.rede||String(cod),fr,it,mot,frT,itT,mail:DB.emails[cod]};
+  return{cod,ano,mes,de,meses,eixo,temPrev,acLabel,acShort,acShortPrev,rede:r.rede||r.nome||String(cod),nome:r.nome||r.rede||String(cod),fr,it,mot,frT,itT,band,mail:DB.emails[cod]};
 }
 
 /* ---------- texto sugerido ---------- */
@@ -370,7 +379,8 @@ function sugerirTexto(c){
   const pi=pior(c.fr);
   let destaque="";
   if(pi>=0&&pi!==c.mes-1)destaque=`\nNo período, o mês mais crítico de Fill Rate segue sendo ${MESES_F[pi]} (${pct(c.fr.s[pi])}).`;
-  return`Segue fechamento dos KPIs referente a ${M}.\n\n${linha("Fill Rate Data Original",c.fr)}\n${linha("Items Fill",c.it)}${mot}${destaque}\n\n[Descreva aqui os maiores impactos do mês e o porquê da evolução.]`;
+  const band=c.band.length>1?`\nTotal da rede somando ${c.band.map(b=>b.nome).join(" + ")}. Por bandeira em ${M}: ${c.band.map(b=>`${b.nome} com Fill Rate ${pct(b.fr.m0)} e Items Fill ${pct(b.it.m0)}`).join("; ")}.`:"";
+  return`Segue fechamento dos KPIs referente a ${M}.\n\n${linha("Fill Rate Data Original",c.fr)}\n${linha("Items Fill",c.it)}${band}${mot}${destaque}\n\n[Descreva aqui os maiores impactos do mês e o porquê da evolução.]`;
 }
 
 /* ---------- gráficos ---------- */
@@ -506,7 +516,8 @@ function update(){
   loteInvalidar();
   const c=calc();CUR=c;store.set("deck.rede",String(c.cod));
   const M=MESES_F[c.mes-1];
-  $("kpis").innerHTML=kpiCard("Fill Rate Data Original · "+M,c.fr,c)+kpiCard("Items Fill · "+M,c.it,c);
+  $("kpis").innerHTML=kpiCard("Fill Rate Data Original · "+M,c.fr,c)+kpiCard("Items Fill · "+M,c.it,c)+
+    (c.band.length>1?`<div class="kpi" style="grid-column:1/-1"><div class="name">Abertura por bandeira · total = ${c.band.map(b=>esc(b.nome)).join(" + ")}</div><div style="overflow-x:auto">${tabelaBandeiras(c)}</div></div>`:"");
   CH.fr&&CH.fr.destroy();CH.it&&CH.it.destroy();
   CH.fr=buildChart($("chFR"),c.fr,c,"FILL RATE",c.rede,"truck");
   CH.it=buildChart($("chIF"),c.it,c,"ITEMS FILL",c.rede,"bottles");
@@ -525,6 +536,15 @@ function tabelaMeses(k,c){
   return`<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 18px">
   <tr><th ${th}></th><th ${th}>${c.temPrev?"Acum.":c.de===1?"YTD":"Acum."}</th>${c.eixo.map(m=>`<th ${th}>${MESES[m-1]}</th>`).join("")}</tr>
   ${k.hasPrev?linha(c.ano-1,k.sp,pct(k.yp),()=>true):""}${linha(c.ano,k.s,pct(k.y),m=>m>=c.de&&m<=c.mes)}</table>`;
+}
+function tabelaBandeiras(c){
+  const td='style="padding:4px 10px;border:1px solid #d9d9d9;text-align:center;font:12px Arial,sans-serif"';
+  const tdn='style="padding:4px 10px;border:1px solid #d9d9d9;text-align:left;font:12px Arial,sans-serif"';
+  const th='style="padding:4px 10px;border:1px solid #d9d9d9;text-align:center;font:bold 12px Arial,sans-serif;background:#10284f;color:#fff"';
+  const M=MESES[c.mes-1],lin=(n,fr,it,b)=>`<tr><td ${tdn}>${b?`<b>${n}</b>`:n}</td><td ${td}>${pct(fr.m0)}</td><td ${td}>${pct(fr.y)}</td><td ${td}>${pct(it.m0)}</td><td ${td}>${pct(it.y)}</td></tr>`;
+  return`<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 18px">
+  <tr><th ${th}>Bandeira</th><th ${th}>FR ${M}</th><th ${th}>FR ${c.acShort}</th><th ${th}>IF ${M}</th><th ${th}>IF ${c.acShort}</th></tr>
+  ${c.band.map(b=>lin(esc(b.nome),b.fr,b.it)).join("")}${lin("Total "+esc(c.rede),c.fr,c.it,true)}</table>`;
 }
 function emailHTML(c,img,comentario){
   const M=MESES_F[c.mes-1];
@@ -551,6 +571,7 @@ ${paras}
 <tr><td></td><td ${head}>${MESES[(c.mes+10)%12]}</td><td ${head}>${MESES[c.mes-1]}</td><td ${head}>vs M-1</td>${prev?`<td ${head}>${c.acShortPrev}</td>`:""}<td ${head}>${c.acShort}</td>${prev?`<td ${head}>vs ${String(c.ano-1).slice(2)}</td>`:""}</tr>
 ${kpiRow("Fill Rate Data Original",c.fr)}${kpiRow("Items Fill",c.it)}
 </table></td></tr></table>
+${c.band.length>1?`<p style="margin:0 0 4px;font:bold 13px Calibri,Arial,sans-serif;color:#10284f">Abertura por bandeira</p>${tabelaBandeiras(c)}`:""}
 <img src="${img.fr}" width="1000" alt="Fill Rate ${esc(c.rede)}" style="display:block;width:100%;max-width:1000px;height:auto;border:0">
 ${tabelaMeses(c.fr,c)}
 <img src="${img.it}" width="1000" alt="Items Fill ${esc(c.rede)}" style="display:block;width:100%;max-width:1000px;height:auto;border:0">
