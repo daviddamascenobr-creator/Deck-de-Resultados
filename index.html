@@ -68,6 +68,15 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .ed4 input[type=color]{width:38px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
 .ed4 input[type=range]{width:100%}
 .ed4 .chk{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:.85rem;font-weight:500;color:var(--fg)}
+.pctwrap{overflow-x:auto}
+table.pct{border-collapse:collapse;font-size:.85rem}
+table.pct th,table.pct td{padding:3px 4px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+table.pct th{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+table.pct td:first-child,table.pct th:first-child{text-align:left;font-weight:600;padding-right:10px}
+.pctin{width:62px!important;padding:4px 5px!important;font-size:.85rem!important;text-align:center;font-variant-numeric:tabular-nums}
+.pctin.man{border-color:var(--accent)!important;background:var(--chip)!important;font-weight:700!important}
+.pctvar{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:6px 0 14px;font-size:.85rem}
+.pctvar label{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:.85rem;font-weight:500;color:var(--fg)}
 .paperwrap{overflow-x:auto;border-radius:10px;border:1px solid var(--line)}
 .paper{background:#fff;color:#1b1b1b;padding:16px;min-width:0}
 .paper canvas{display:block;width:100%!important;height:auto!important}
@@ -131,6 +140,12 @@ table.lote th{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;col
   <section class="panel" id="secPrev" hidden>
     <div class="step"><b>3</b><h2>Conferir KPIs e gráficos</h2></div>
     <div class="kpis" id="kpis"></div>
+    <details class="ed4" id="edPct">
+      <summary>Ajustar porcentagens manualmente</summary>
+      <p class="hint" style="margin:0">Em branco = cálculo automático (o número cinza). Digite um valor, por exemplo 72,5, para substituir. O ajuste vale para esta rede e este período, muda KPIs, gráficos, tabelas e e-mail, e as variações se recalculam com os números ajustados. Apague o campo para voltar ao automático.</p>
+      <div id="pctEd"></div>
+      <div class="row"><button id="pctReset">Voltar tudo ao automático</button><span class="status" id="pctStatus" role="status"></span></div>
+    </details>
     <details class="ed4" id="ed4" open hidden>
       <summary>Editar modelo 4</summary>
       <p class="hint" style="margin:0">As mudanças aparecem na hora nos gráficos e saem no e-mail. Ficam salvas neste navegador.</p>
@@ -242,6 +257,9 @@ const GRUPOS=[{cod:44,nome:"D´AVÓ + POUPAKI",bandeiras:{44:"D´Avó",1600:"Pou
 const GRUPO_DE={};GRUPOS.forEach(g=>Object.keys(g.bandeiras).forEach(c=>GRUPO_DE[c]=g));
 let CH={fr:null,it:null};
 let CUR=null;   // cálculo da rede/mês selecionados
+// Porcentagens ajustadas à mão, por rede + ano + período: {fr:{s:{mes:v},sp:{mes:v},y,yp,dM,vsAA},it:{...}}
+let OVR={};
+const ovrKey=(cod,ano,de,mes)=>`${cod}|${ano}|${de}|${mes}`;
 
 /* ---------- utilidades ---------- */
 const norm=s=>String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").trim().toLowerCase();
@@ -314,7 +332,7 @@ async function loadFiles(files){
   const st=$("loadStatus");st.className="status";st.textContent="Lendo planilha…";
   try{
     // cada carga substitui a base anterior (vários arquivos soltos juntos são somados)
-    for(const k of ["fr","it","mot","redes","emails"])DB[k]={};DB.band={fr:{},it:{}};DB.files=[];
+    for(const k of ["fr","it","mot","redes","emails"])DB[k]={};DB.band={fr:{},it:{}};DB.files=[];OVR={};
     let tot={fr:0,it:0,em:0};
     for(const f of files){
       const buf=await f.arrayBuffer();
@@ -389,7 +407,16 @@ function calc(codArg){
     // ano anterior entra completo (Jan–Dez), como no deck de resultados
     const y=ytd(src,cod,ano,de,mes),yp=ytd(src,cod,ano-1,1,12);
     const hasPrev=sp.some(v=>v!=null);
-    return{s:s.map((v,i)=>i<mes?v:null),sp,m0,m1,dM:m0!=null&&m1!=null?m0-m1:null,y,yp:hasPrev?yp:null,vsAA:hasPrev?rel(y,yp):null,hasPrev,m0aa:sp[mes-1]};
+    const sA=s.map((v,i)=>i<mes?v:null),ypA=hasPrev?yp:null;
+    // ajustes manuais (em branco = automático)
+    const o=(OVR[ovrKey(cod,ano,de,mes)]||{})[src===DB.fr?"fr":"it"]||{},has=f=>o[f]!=null;
+    const s2=sA.map((v,i)=>(o.s||{})[i+1]??v),sp2=sp.map((v,i)=>(o.sp||{})[i+1]??v);
+    const m0b=s2[mes-1],m1b=mes>1?s2[mes-2]:sp2[11];
+    const y2=o.y??y,yp2=hasPrev?(o.yp??yp):null;
+    const dMa=m0b!=null&&m1b!=null?m0b-m1b:null,vsA=hasPrev?rel(y2,yp2):null;
+    const manual=Object.keys(o.s||{}).length+Object.keys(o.sp||{}).length+["y","yp","dM","vsAA"].filter(has).length;
+    return{s:s2,sp:sp2,m0:m0b,m1:m1b,dM:o.dM??dMa,y:y2,yp:yp2,vsAA:hasPrev?(o.vsAA??vsA):null,hasPrev,m0aa:sp2[mes-1],
+      auto:{s:sA,sp,y,yp:ypA,dM:dMa,vsAA:vsA},manual};
   };
   const motO=((DB.mot[cod]||{})[ano]||{})[mes]||{};
   const mot=Object.entries(motO).map(([m,v])=>({m,v:v[0]})).sort((a,b)=>b.v-a.v);
@@ -594,7 +621,7 @@ e4Preencher();
 /* ---------- prévia ---------- */
 function kpiCard(nome,k,c){
   const cls=v=>v==null?"":v>=0?"up":"down";
-  return`<div class="kpi"><div class="name">${nome}</div>
+  return`<div class="kpi"><div class="name">${nome}${k.manual?` <span class="pill" title="Há porcentagens ajustadas à mão">ajustado à mão</span>`:""}</div>
   <div class="row" style="align-items:baseline;gap:12px"><div class="big">${pct(k.m0)}</div><span class="pill ${cls(k.dM)}">${pp(k.dM)} vs ${MESES[(c.mes+10)%12]}</span></div>
   <div class="grid">
     <div><span>${MESES[(c.mes+10)%12]} (M-1)</span><strong>${pct(k.m1)}</strong></div>
@@ -612,12 +639,60 @@ function update(){
   CH.fr&&CH.fr.destroy();CH.it&&CH.it.destroy();
   CH.fr=buildChart($("chFR"),c.fr,c,"FILL RATE",c.rede,"truck");
   CH.it=buildChart($("chIF"),c.it,c,"ITEMS FILL",c.rede,"bottles");
-  $("comentario").value=sugerirTexto(c);
+  $("comentario").value=SUGESTAO=sugerirTexto(c);
+  pctRender(c);
   $("para").value=(c.mail?.to||[]).join("; ");
   $("cc").value=(c.mail?.cc||[]).join("; ");
   $("assunto").value=`[DECK DE RESULTADOS - ${M}] - ${c.nome}`;
   $("secMail").hidden=true;
 }
+
+/* ---------- ajuste manual das porcentagens ---------- */
+let SUGESTAO="";
+const p1=v=>v==null||!isFinite(v)?"":(v*100).toFixed(1).replace(".",",");
+// aceita "72,5", "72.5", "72,5%", "+1,2 p.p." → fração (0,725)
+function lerPct(t){t=String(t).replace(/p\.?\s*p\.?/gi,"").replace(/[%\s]/g,"").replace(",",".");if(t==="")return null;const n=Number(t);return isFinite(n)?n/100:NaN;}
+function pctRender(c){
+  const kpi=(kind,nome)=>{
+    const k=c[kind],cel=(campo,mes,auto,val,man)=>`<td><input class="pctin${man?" man":""}" inputmode="decimal" aria-label="${nome} ${campo==="y"?c.acShort:campo==="yp"?c.acShortPrev:MESES[mes-1]+" "+(campo==="sp"?c.ano-1:c.ano)}" data-kind="${kind}" data-campo="${campo}" data-mes="${mes||""}" placeholder="${p1(auto)}" value="${man?p1(val):""}"></td>`;
+    const o=(OVR[ovrKey(c.cod,c.ano,c.de,c.mes)]||{})[kind]||{};
+    const linha=(ano,campo,serieKey,acCampo,ok)=>`<tr><td>${ano}</td>${cel(acCampo,0,k.auto[acCampo],k[acCampo],o[acCampo]!=null)}${c.eixo.map(m=>ok(m)?cel(campo,m,k.auto[serieKey][m-1],k[serieKey][m-1],(o[campo]||{})[m]!=null):"<td>-</td>").join("")}</tr>`;
+    return`<div class="pctwrap"><table class="pct"><caption style="text-align:left;font:700 1rem var(--display);letter-spacing:.05em;text-transform:uppercase;color:var(--navy);padding:6px 0">${nome}</caption>
+      <tr><th></th><th>Acum.</th>${c.eixo.map(m=>`<th>${MESES[m-1]}</th>`).join("")}</tr>
+      ${k.hasPrev?linha(c.ano-1,"sp","sp","yp",()=>true):""}${linha(c.ano,"s","s","y",m=>m>=c.de&&m<=c.mes)}</table></div>
+      <div class="pctvar"><label>vs M-1 (p.p.) <input class="pctin${o.dM!=null?" man":""}" inputmode="decimal" data-kind="${kind}" data-campo="dM" placeholder="${p1(k.auto.dM)}" value="${o.dM!=null?p1(o.dM):""}"></label>
+      ${k.hasPrev?`<label>${c.acShort} vs ${c.ano-1} (%) <input class="pctin${o.vsAA!=null?" man":""}" inputmode="decimal" data-kind="${kind}" data-campo="vsAA" placeholder="${p1(k.auto.vsAA)}" value="${o.vsAA!=null?p1(o.vsAA):""}"></label>`:""}</div>`;
+  };
+  $("pctEd").innerHTML=kpi("fr","Fill Rate Data Original")+kpi("it","Items Fill");
+  pctStatus(c);
+}
+function pctStatus(c){const n=(c.fr.manual||0)+(c.it.manual||0);$("pctStatus").textContent=n?`${n} valor${n>1?"es":""} ajustado${n>1?"s":""} à mão nesta rede.`:"Tudo no cálculo automático.";}
+// recalcula sem apagar o que a pessoa já escreveu em Para, Cópia e assunto
+function pctAplicar(){
+  const c=calc();CUR=c;const M=MESES_F[c.mes-1];
+  $("kpis").innerHTML=kpiCard("Fill Rate Data Original · "+M,c.fr,c)+kpiCard("Items Fill · "+M,c.it,c)+
+    (c.band.length>1?`<div class="kpi" style="grid-column:1/-1"><div class="name">Abertura por bandeira · total = ${c.band.map(b=>esc(b.nome)).join(" + ")}</div><div style="overflow-x:auto">${tabelaBandeiras(c)}</div></div>`:"");
+  CH.fr&&CH.fr.destroy();CH.it&&CH.it.destroy();
+  CH.fr=buildChart($("chFR"),c.fr,c,"FILL RATE",c.rede,"truck");
+  CH.it=buildChart($("chIF"),c.it,c,"ITEMS FILL",c.rede,"bottles");
+  // o comentário só é refeito se ainda for o texto sugerido (não apaga o que a pessoa escreveu)
+  if($("comentario").value===SUGESTAO)$("comentario").value=SUGESTAO=sugerirTexto(c);
+  // atualiza o número cinza das variações, que dependem dos valores ajustados
+  for(const kind of ["fr","it"])for(const campo of ["dM","vsAA"]){const el=$("pctEd").querySelector(`input[data-kind="${kind}"][data-campo="${campo}"]`);if(el)el.placeholder=p1(c[kind].auto[campo]);}
+  pctStatus(c);$("secMail").hidden=true;loteInvalidar();
+}
+$("pctEd").addEventListener("change",ev=>{
+  const el=ev.target;if(!el.dataset||!el.dataset.campo||!CUR)return;
+  const v=lerPct(el.value),{kind,campo}=el.dataset,mes=+el.dataset.mes,key=ovrKey(CUR.cod,CUR.ano,CUR.de,CUR.mes);
+  if(Number.isNaN(v)){$("pctStatus").textContent="Valor inválido: use só números, por exemplo 72,5.";el.focus();return;}
+  const o=((OVR[key]??(OVR[key]={}))[kind]??(OVR[key][kind]={}));
+  if(campo==="s"||campo==="sp"){const t=o[campo]??(o[campo]={});if(v==null)delete t[mes];else t[mes]=v;}
+  else if(v==null)delete o[campo];else o[campo]=v;
+  el.classList.toggle("man",v!=null);
+  if(v!=null)el.value=p1(v);
+  pctAplicar();
+});
+$("pctReset").onclick=()=>{if(!CUR)return;delete OVR[ovrKey(CUR.cod,CUR.ano,CUR.de,CUR.mes)];pctAplicar();pctRender(CUR);};
 
 /* ---------- e-mail ---------- */
 function tabelaMeses(k,c){
@@ -791,7 +866,7 @@ $("estilo").onchange=()=>{store.set("deck.estilo",$("estilo").value);e4Mostrar()
   $("secMail").hidden=true;};
 $("mes").onchange=()=>{if(+$("de").value>+$("mes").value)$("de").value=$("mes").value;update();};
 $("de").onchange=()=>{if(+$("de").value>+$("mes").value)$("mes").value=$("de").value;update();};$("ano").onchange=()=>{fillMeses(false);update();};
-$("regen").onclick=()=>CUR&&($("comentario").value=sugerirTexto(CUR));
+$("regen").onclick=()=>CUR&&($("comentario").value=SUGESTAO=sugerirTexto(CUR));
 ["assNome","assCargo","assEmail"].forEach(id=>{$(id).value=store.get("deck."+id);$(id).addEventListener("input",()=>store.set("deck."+id,$(id).value));});
 $("confirmar").onclick=()=>{
   if(!CUR)return;
